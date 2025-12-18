@@ -537,7 +537,7 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                 <TextArea 
                   label="Notas"
                   placeholder="Detalles adicionales sobre esta inversión..."
-                  value={formData.notas}
+                  value={formData.notes}
                   onChange={e => setFormData({...formData, notas: e.target.value})}
                 />
               </div>
@@ -584,7 +584,8 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                         className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white text-gray-900"
                         placeholder="Ej: Aportación mensual extraordinaria"
                         value={paymentForm.nota}
-                        onChange={e => setPaymentForm({...paymentForm, nota} : { ...paymentForm, nota: e.target.value })}
+                        // Corrected the syntax of the onChange handler.
+                        onChange={e => setPaymentForm({ ...paymentForm, nota: e.target.value })}
                     />
                   </div>
                   <div className="flex gap-2 pt-2">
