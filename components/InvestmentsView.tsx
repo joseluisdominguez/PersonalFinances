@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { Plus, Edit2, Trash2, PiggyBank, Coins, History, X, Calendar, TrendingUp, Info, MinusCircle, Wallet, ArrowUpCircle } from 'lucide-react';
 import { Investment, InvestmentType, InterestPayment, PaymentType } from '../types';
-import { Button, Card, Input, Select, ConfirmDialog } from './ui';
+import { Button, Card, Input, Select, ConfirmDialog, TextArea } from './ui';
 import { formatCurrency, formatDate, generateId, getMonthName } from '../utils';
 
 interface Props {
@@ -234,7 +234,7 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
           <Input 
             label="TAE (%)" 
             type="number" step="0.01" 
-            value={formData.detalles.tae || ''} 
+            value={formData.detalles.tae === 0 ? '' : formData.detalles.tae || ''} 
             onChange={e => setFormData({...formData, detalles: {...formData.detalles, tae: e.target.value}})} 
           />
         );
@@ -259,7 +259,7 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                <Input 
                 label="TAE (%)" 
                 type="number" step="0.01" 
-                value={formData.detalles.tae || ''} 
+                value={formData.detalles.tae === 0 ? '' : formData.detalles.tae || ''} 
                 onChange={e => setFormData({...formData, detalles: {...formData.detalles, tae: e.target.value}})} 
                />
              </div>
@@ -514,14 +514,14 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                     <Input 
                         label={isCashflowType(formData.tipo) ? "Saldo Actual (€)" : "Valor Actual (€)"} 
                         type="number" step="0.01" 
-                        value={formData.valorActual} 
+                        value={formData.valorActual === 0 ? '' : formData.valorActual} 
                         onChange={e => setFormData({...formData, valorActual: Number(e.target.value)})} 
                         required 
                     />
                     <Input 
                         label={isCashflowType(formData.tipo) ? "Capital Inicial (€)" : "Capital Invertido (€)"} 
                         type="number" step="0.01" 
-                        value={formData.capitalInvertido} 
+                        value={formData.capitalInvertido === 0 ? '' : formData.capitalInvertido} 
                         onChange={e => setFormData({...formData, capitalInvertido: Number(e.target.value)})} 
                         required 
                         placeholder="Opcional"
@@ -533,10 +533,9 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                 {renderSpecificFields()}
               </div>
 
-              <div className="space-y-1 px-4">
-                <label className="text-sm font-medium text-gray-700">Notas</label>
-                <textarea 
-                  className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 mt-1 focus:border-blue-500 focus:outline-none bg-white text-gray-900 min-h-[100px]"
+              <div className="space-y-1">
+                <TextArea 
+                  label="Notas"
                   placeholder="Detalles adicionales sobre esta inversión..."
                   value={formData.notas}
                   onChange={e => setFormData({...formData, notas: e.target.value})}
@@ -573,7 +572,7 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                   <Input 
                      label={modalType === 'retiro' ? "Cantidad a retirar (€)" : modalType === 'aportacion' ? "Cantidad a aportar (€)" : "Cantidad (€)"} 
                      type="number" step="0.01" 
-                     value={paymentForm.cantidad} 
+                     value={paymentForm.cantidad === '0' || paymentForm.cantidad === 0 ? '' : paymentForm.cantidad} 
                      onChange={e => setPaymentForm({...paymentForm, cantidad: e.target.value})} 
                      required
                      autoFocus
@@ -581,7 +580,7 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                   <div className="flex flex-col gap-1">
                     <label className="text-sm font-medium text-gray-700">Nota (Opcional)</label>
                     <input 
-                        className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm"
+                        className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white text-gray-900"
                         placeholder="Ej: Aportación mensual extraordinaria"
                         value={paymentForm.nota}
                         onChange={e => setPaymentForm({...paymentForm, nota: e.target.value})}
