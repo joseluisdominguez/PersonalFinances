@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Treemap } from 'recharts';
-import { ChevronLeft, ChevronRight, Save, Trash2, Wallet, CheckSquare, Square, PieChart } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { ChevronLeft, ChevronRight, Save, Trash2, Wallet, CheckSquare, Square } from 'lucide-react';
 import { Balance } from '../types';
 import { Button, Card, ConfirmDialog } from './ui';
 import { formatCurrency, getMonthName } from '../utils';
@@ -12,11 +12,6 @@ interface Props {
   onSave: (b: Balance) => void;
   onDelete: (id: string) => void;
 }
-
-const TREEMAP_COLORS = [
-  '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', 
-  '#EC4899', '#06B6D4', '#6366F1', '#14B8A6', '#F97316'
-];
 
 export const BalanceView: React.FC<Props> = ({ data, banks, onSave, onDelete }) => {
   const [viewDate, setViewDate] = useState(new Date());
@@ -87,16 +82,6 @@ export const BalanceView: React.FC<Props> = ({ data, banks, onSave, onDelete }) 
       });
   }, [data, selectedBanks]);
 
-  const treeMapData = useMemo(() => {
-    return banksToSum
-      .map((bank, index) => ({
-        name: bank,
-        size: Math.max(0, Number(formState[bank]) || 0),
-        fill: TREEMAP_COLORS[index % TREEMAP_COLORS.length]
-      }))
-      .filter(item => item.size > 0);
-  }, [banksToSum, formState]);
-
   const previousMonthId = `${viewDate.getMonth() === 0 ? viewDate.getFullYear() - 1 : viewDate.getFullYear()}-${String(viewDate.getMonth() === 0 ? 12 : viewDate.getMonth()).padStart(2, '0')}`;
   const previousBalance = data.find(b => b.id === previousMonthId);
   
@@ -116,38 +101,6 @@ export const BalanceView: React.FC<Props> = ({ data, banks, onSave, onDelete }) 
     const newDate = new Date(viewDate);
     newDate.setMonth(newDate.getMonth() + delta);
     setViewDate(newDate);
-  };
-
-  const CustomizedTreemapContent = (props: any) => {
-    const { depth, x, y, width, height, payload, name, size } = props;
-    if (depth !== 1 || !payload) return null;
-
-    return (
-      <g>
-        <rect
-          x={x}
-          y={y}
-          width={width}
-          height={height}
-          style={{
-            fill: payload.fill || '#3B82F6',
-            stroke: '#fff',
-            strokeWidth: 2 / (depth + 1),
-            strokeOpacity: 1,
-          }}
-        />
-        {width > 60 && height > 40 && (
-          <>
-            <text x={x + width / 2} y={y + height / 2 - 4} textAnchor="middle" fill="#fff" fontSize={Math.min(width / 8, 14)} fontWeight="700">
-              {name}
-            </text>
-            <text x={x + width / 2} y={y + height / 2 + 12} textAnchor="middle" fill="#fff" fillOpacity={0.8} fontSize={Math.min(width / 10, 12)}>
-              {formatCurrency(size).replace(',00', '')}
-            </text>
-          </>
-        )}
-      </g>
-    );
   };
 
   return (
@@ -200,31 +153,6 @@ export const BalanceView: React.FC<Props> = ({ data, banks, onSave, onDelete }) 
           </div>
         </Card>
       </div>
-
-      <Card className="flex flex-col h-[400px]">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
-              <PieChart size={20} className="text-blue-500" /> Distribución del Patrimonio Actual
-            </h3>
-            <p className="text-sm text-gray-500">Saldos por banco para {getMonthName(viewDate.getMonth())}</p>
-          </div>
-        </div>
-        <div className="flex-1 w-full min-h-0">
-          {treeMapData.length > 0 ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <Treemap data={treeMapData} dataKey="size" stroke="#fff" fill="#8884d8" content={<CustomizedTreemapContent />}>
-                <Tooltip formatter={(value: any) => formatCurrency(Number(value))} />
-              </Treemap>
-            </ResponsiveContainer>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
-               <PieChart size={48} className="mb-2 opacity-20" />
-               <p>No hay datos suficientes para mostrar la distribución.</p>
-            </div>
-          )}
-        </div>
-      </Card>
 
       <Card>
         <div className="flex justify-between items-center mb-6">
