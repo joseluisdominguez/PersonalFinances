@@ -516,14 +516,12 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                         type="number" step="0.01" 
                         value={formData.valorActual === 0 ? '' : formData.valorActual} 
                         onChange={e => setFormData({...formData, valorActual: Number(e.target.value)})} 
-                        required 
                     />
                     <Input 
                         label={isCashflowType(formData.tipo) ? "Capital Inicial (€)" : "Capital Invertido (€)"} 
                         type="number" step="0.01" 
                         value={formData.capitalInvertido === 0 ? '' : formData.capitalInvertido} 
                         onChange={e => setFormData({...formData, capitalInvertido: Number(e.target.value)})} 
-                        required 
                         placeholder="Opcional"
                     />
                   </div>
@@ -537,7 +535,7 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                 <TextArea 
                   label="Notas"
                   placeholder="Detalles adicionales sobre esta inversión..."
-                  value={formData.notes}
+                  value={formData.notas}
                   onChange={e => setFormData({...formData, notas: e.target.value})}
                 />
               </div>
@@ -569,7 +567,6 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                      onChange={e => setPaymentForm({...paymentForm, fecha: e.target.value})} 
                      required
                   />
-                  {/* Fixed TS comparison error: paymentForm.cantidad is a string, so only compare with '0' */}
                   <Input 
                      label={modalType === 'retiro' ? "Cantidad a retirar (€)" : modalType === 'aportacion' ? "Cantidad a aportar (€)" : "Cantidad (€)"} 
                      type="number" step="0.01" 
@@ -584,7 +581,6 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                         className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white text-gray-900"
                         placeholder="Ej: Aportación mensual extraordinaria"
                         value={paymentForm.nota}
-                        // Corrected the syntax of the onChange handler.
                         onChange={e => setPaymentForm({ ...paymentForm, nota: e.target.value })}
                     />
                   </div>
