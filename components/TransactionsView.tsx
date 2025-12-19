@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, TrendingUp, TrendingDown, Filter, ChevronLeft, ChevronRight, List, Layers, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ArrowUpDown, Info, Edit2, X, Save, BarChart3, CalendarClock, Zap } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, TrendingDown, Filter, ChevronLeft, ChevronRight, List, Layers, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ArrowUpDown, Info, Edit2, X, Save, BarChart3, CalendarClock, Zap, CalendarRange } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { Button, Card, Input, Select, ConfirmDialog } from './ui';
@@ -26,6 +26,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
   const [filterType, setFilterType] = useState<'all' | TransactionType>('all');
   const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'chart'>('list');
   const [isAmortizedMode, setIsAmortizedMode] = useState(false);
+  const [showDevengoFields, setShowDevengoFields] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<string[]>(categories.map(c => c.name));
   
   // Sorting State
@@ -48,7 +49,8 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
     nombre: '',
     cantidad: 0,
     notas: '',
-    mesesCobertura: 1
+    fechaInicioDevengo: '',
+    fechaFinDevengo: ''
   };
 
   const [formData, setFormData] = useState<Partial<Transaction>>(initialFormState);
@@ -70,7 +72,8 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
       categoria: formData.categoria!,
       cantidad: Number(formData.cantidad),
       notas: formData.notas,
-      mesesCobertura: Number(formData.mesesCobertura) || 1
+      fechaInicioDevengo: showDevengoFields ? formData.fechaInicioDevengo : undefined,
+      fechaFinDevengo: showDevengoFields ? formData.fechaFinDevengo : undefined
     } as Transaction);
 
     setFormData(prev => ({
@@ -81,6 +84,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
     }));
     
     setEditingId(null);
+    setShowDevengoFields(false);
   };
 
   const handleEdit = (t: Transaction) => {
@@ -92,14 +96,17 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
       nombre: t.nombre,
       cantidad: t.cantidad,
       notas: t.notas || '',
-      mesesCobertura: t.mesesCobertura || 1
+      fechaInicioDevengo: t.fechaInicioDevengo || '',
+      fechaFinDevengo: t.fechaFinDevengo || ''
     });
+    setShowDevengoFields(!!t.fechaInicioDevengo);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setFormData(initialFormState);
+    setShowDevengoFields(false);
   };
 
   const handleSort = (key: keyof Transaction, category?: string) => {
@@ -129,26 +136,48 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
     return t[key];
   };
 
-  // Lógica de Amortización: ¿Qué transacciones afectan a este mes?
+  // Ayudante para calcular cuántos meses distintos abarca un rango
+  const getMonthsDiff = (startStr: string, endStr: string) => {
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+  };
+
+  // Lógica de Amortización: ¿Qué transacciones afectan a este mes por su rango de devengo?
   const amortizedContributions = useMemo(() => {
     const vYear = viewDate.getFullYear();
     const vMonth = viewDate.getMonth();
+    const vTime = new Date(vYear, vMonth, 1).getTime();
     
     return data.filter(t => {
-      const tDate = new Date(t.fecha);
-      const tYear = tDate.getFullYear();
-      const tMonth = tDate.getMonth();
-      const coverage = t.mesesCobertura || 1;
-      
-      const diffMonths = (vYear - tYear) * 12 + (vMonth - tMonth);
-      const isWithinCoverage = diffMonths >= 0 && diffMonths < coverage;
       const typeMatch = filterType === 'all' || t.tipo === filterType;
+      if (!typeMatch) return false;
+
+      // Si tiene rango de devengo definido
+      if (t.fechaInicioDevengo && t.fechaFinDevengo) {
+        const start = new Date(t.fechaInicioDevengo);
+        const end = new Date(t.fechaFinDevengo);
+        
+        // Creamos fechas normalizadas al primer día del mes para comparar meses
+        const startMonth = new Date(start.getFullYear(), start.getMonth(), 1).getTime();
+        const endMonth = new Date(end.getFullYear(), end.getMonth(), 1).getTime();
+        
+        return vTime >= startMonth && vTime <= endMonth;
+      }
       
-      return isWithinCoverage && typeMatch;
-    }).map(t => ({
-      ...t,
-      cantidadMensual: t.cantidad / (t.mesesCobertura || 1)
-    }));
+      // Si no tiene devengo, solo aparece en su mes de pago real
+      const tDate = new Date(t.fecha);
+      return tDate.getMonth() === vMonth && tDate.getFullYear() === vYear;
+    }).map(t => {
+      if (t.fechaInicioDevengo && t.fechaFinDevengo) {
+        const totalMonths = getMonthsDiff(t.fechaInicioDevengo, t.fechaFinDevengo);
+        return {
+          ...t,
+          cantidadMensual: t.cantidad / (totalMonths || 1)
+        };
+      }
+      return { ...t, cantidadMensual: t.cantidad };
+    });
   }, [data, viewDate, filterType]);
 
   const filteredTransactions = useMemo(() => {
@@ -289,16 +318,23 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
       <td className="p-4 text-sm text-gray-600">
         <div className="flex flex-col">
           {formatDate(t.fecha)}
-          {t.mesesCobertura && t.mesesCobertura > 1 && (
-            <span className="text-[10px] text-blue-500 font-bold uppercase tracking-tighter flex items-center gap-0.5">
-              <CalendarClock size={10} /> {t.mesesCobertura} meses
+          {t.fechaInicioDevengo && (
+            <span className="text-[10px] text-blue-500 font-bold uppercase tracking-tighter flex items-center gap-0.5 mt-1" title={`Cubre del ${formatDate(t.fechaInicioDevengo)} al ${formatDate(t.fechaFinDevengo!)}`}>
+              <CalendarRange size={10} /> {getMonthsDiff(t.fechaInicioDevengo, t.fechaFinDevengo!)} meses
             </span>
           )}
         </div>
       </td>
       <td className="p-4 font-medium text-gray-900">
         <div className="flex items-center gap-2">
-          {t.nombre}
+          <div className="flex flex-col">
+            <span>{t.nombre}</span>
+            {t.fechaInicioDevengo && (
+              <span className="text-[10px] text-gray-400 font-normal">
+                Servicio: {formatDate(t.fechaInicioDevengo)} al {formatDate(t.fechaFinDevengo!)}
+              </span>
+            )}
+          </div>
           {t.notas && (
             <div className="group relative">
               <Info size={16} className="text-gray-400 cursor-help" />
@@ -365,7 +401,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                 ? 'bg-blue-600 border-blue-600 text-white shadow-md' 
                 : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
             }`}
-            title="Activa la vista prorrateada para ver el consumo económico real del mes"
+            title="Activa la vista prorrateada para ver el consumo económico real por devengo"
           >
             <Zap size={16} className={isAmortizedMode ? 'fill-white' : ''} />
             <span className="hidden sm:inline">Prorrateo</span>
@@ -425,7 +461,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                   <option value="ingreso">Ingreso</option>
                   <option value="gasto">Gasto</option>
                 </Select>
-                <Input label="Fecha" type="date" value={formData.fecha} onChange={e => setFormData({...formData, fecha: e.target.value})} required />
+                <Input label="Fecha Pago" type="date" value={formData.fecha} onChange={e => setFormData({...formData, fecha: e.target.value})} required />
               </div>
               <Input label="Descripción" placeholder="Ej: Seguro del coche" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} required />
               
@@ -443,26 +479,41 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                 />
               </div>
 
-              <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <CalendarClock size={16} className="text-blue-600" />
-                  <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Planificación</span>
-                </div>
-                <Select 
-                  label="Periodo de Cobertura" 
-                  value={formData.mesesCobertura} 
-                  onChange={e => setFormData({...formData, mesesCobertura: Number(e.target.value)})}
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-100 space-y-3">
+                <button 
+                  type="button" 
+                  onClick={() => setShowDevengoFields(!showDevengoFields)}
+                  className="flex items-center justify-between w-full group"
                 >
-                  <option value={1}>Gasto Puntual / Mensual</option>
-                  <option value={2}>Bimensual (2 meses)</option>
-                  <option value={3}>Trimestral (3 meses)</option>
-                  <option value={4}>Cuatrimestral (4 meses)</option>
-                  <option value={6}>Semestral (6 meses)</option>
-                  <option value={12}>Anual (12 meses)</option>
-                  <option value={24}>Bianual (24 meses)</option>
-                </Select>
-                <p className="text-[10px] text-blue-600 mt-2 italic">
-                  Si eliges &gt; 1 mes, el gasto se repartirá visualmente en los meses siguientes al activar el modo "Prorrateo".
+                  <div className="flex items-center gap-2">
+                    <CalendarClock size={16} className="text-blue-600" />
+                    <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Repartir en varios meses</span>
+                  </div>
+                  <div className={`w-10 h-5 rounded-full transition-colors relative ${showDevengoFields ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${showDevengoFields ? 'left-5.5' : 'left-0.5'}`}></div>
+                  </div>
+                </button>
+
+                {showDevengoFields && (
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-blue-100 animate-in fade-in slide-in-from-top-1">
+                    <Input 
+                      label="Inicio Cobertura" 
+                      type="date" 
+                      value={formData.fechaInicioDevengo} 
+                      onChange={e => setFormData({...formData, fechaInicioDevengo: e.target.value})} 
+                      required={showDevengoFields}
+                    />
+                    <Input 
+                      label="Fin Cobertura" 
+                      type="date" 
+                      value={formData.fechaFinDevengo} 
+                      onChange={e => setFormData({...formData, fechaFinDevengo: e.target.value})} 
+                      required={showDevengoFields}
+                    />
+                  </div>
+                )}
+                <p className="text-[10px] text-blue-600 italic">
+                  Útil para facturas trimestrales o seguros anuales. El gasto se dividirá entre los meses del periodo.
                 </p>
               </div>
               
@@ -549,7 +600,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
               <div className="overflow-x-auto">
                 {isAmortizedMode && (
                   <div className="bg-blue-50 p-3 text-xs text-blue-700 font-medium flex items-center gap-2 border-b border-blue-100">
-                    <Info size={14} /> La lista sigue mostrando movimientos reales. Los números de arriba reflejan el prorrateo.
+                    <Info size={14} /> La lista sigue mostrando movimientos reales. Los números de arriba reflejan el prorrateo por devengo.
                   </div>
                 )}
                 <table className="w-full text-left">
@@ -608,7 +659,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                     <h3 className="text-lg font-bold text-gray-700">Distribución de Gastos por Categoría</h3>
                     {isAmortizedMode && (
                       <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full uppercase">
-                        <Zap size={10} /> Datos Prorrateados
+                        <Zap size={10} /> Datos por Devengo
                       </span>
                     )}
                   </div>

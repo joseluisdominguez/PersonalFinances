@@ -6,13 +6,15 @@ export type TransactionCategory = string;
 
 export interface Transaction {
   id: string;
-  fecha: string; // ISO string
+  fecha: string; // ISO string (Fecha del pago/cobro real)
   nombre: string;
   tipo: TransactionType;
   categoria: string;
   cantidad: number;
   notas?: string;
-  mesesCobertura?: number; // 1 = mensual, 3 = trimestral, 12 = anual, etc.
+  // Campos para el devengo (amortización visual)
+  fechaInicioDevengo?: string; 
+  fechaFinDevengo?: string;
 }
 
 export interface Balance {
