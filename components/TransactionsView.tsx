@@ -462,7 +462,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                   <option value={24}>Bianual (24 meses)</option>
                 </Select>
                 <p className="text-[10px] text-blue-600 mt-2 italic">
-                  Si eliges > 1 mes, el gasto se repartirá visualmente en los meses siguientes al activar el modo "Prorrateo".
+                  Si eliges &gt; 1 mes, el gasto se repartirá visualmente en los meses siguientes al activar el modo "Prorrateo".
                 </p>
               </div>
               
