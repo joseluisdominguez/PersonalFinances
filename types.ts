@@ -12,6 +12,7 @@ export interface Transaction {
   categoria: string;
   cantidad: number;
   notas?: string;
+  mesesCobertura?: number; // 1 = mensual, 3 = trimestral, 12 = anual, etc.
 }
 
 export interface Balance {

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Plus, Trash2, TrendingUp, TrendingDown, Filter, ChevronLeft, ChevronRight, List, Layers, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ArrowUpDown, Info, Edit2, X, Save, BarChart3 } from 'lucide-react';
+import { Plus, Trash2, TrendingUp, TrendingDown, Filter, ChevronLeft, ChevronRight, List, Layers, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ArrowUpDown, Info, Edit2, X, Save, BarChart3, CalendarClock, Zap } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Transaction, TransactionType, CategoryItem } from '../types';
 import { Button, Card, Input, Select, ConfirmDialog } from './ui';
@@ -25,6 +25,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
   
   const [filterType, setFilterType] = useState<'all' | TransactionType>('all');
   const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'chart'>('list');
+  const [isAmortizedMode, setIsAmortizedMode] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<string[]>(categories.map(c => c.name));
   
   // Sorting State
@@ -46,7 +47,8 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
     fecha: new Date().toISOString().split('T')[0],
     nombre: '',
     cantidad: 0,
-    notas: ''
+    notas: '',
+    mesesCobertura: 1
   };
 
   const [formData, setFormData] = useState<Partial<Transaction>>(initialFormState);
@@ -67,10 +69,10 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
       tipo: formData.tipo as TransactionType,
       categoria: formData.categoria!,
       cantidad: Number(formData.cantidad),
-      notas: formData.notas
+      notas: formData.notas,
+      mesesCobertura: Number(formData.mesesCobertura) || 1
     } as Transaction);
 
-    // PERSISTIR: Fecha, Tipo y Categoría. LIMPIAR: Nombre, Cantidad, Notas.
     setFormData(prev => ({
       ...prev,
       nombre: '',
@@ -89,7 +91,8 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
       fecha: t.fecha,
       nombre: t.nombre,
       cantidad: t.cantidad,
-      notas: t.notas || ''
+      notas: t.notas || '',
+      mesesCobertura: t.mesesCobertura || 1
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -125,6 +128,28 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
     }
     return t[key];
   };
+
+  // Lógica de Amortización: ¿Qué transacciones afectan a este mes?
+  const amortizedContributions = useMemo(() => {
+    const vYear = viewDate.getFullYear();
+    const vMonth = viewDate.getMonth();
+    
+    return data.filter(t => {
+      const tDate = new Date(t.fecha);
+      const tYear = tDate.getFullYear();
+      const tMonth = tDate.getMonth();
+      const coverage = t.mesesCobertura || 1;
+      
+      const diffMonths = (vYear - tYear) * 12 + (vMonth - tMonth);
+      const isWithinCoverage = diffMonths >= 0 && diffMonths < coverage;
+      const typeMatch = filterType === 'all' || t.tipo === filterType;
+      
+      return isWithinCoverage && typeMatch;
+    }).map(t => ({
+      ...t,
+      cantidadMensual: t.cantidad / (t.mesesCobertura || 1)
+    }));
+  }, [data, viewDate, filterType]);
 
   const filteredTransactions = useMemo(() => {
     return data.filter(t => {
@@ -162,10 +187,12 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
 
   const chartData = useMemo(() => {
     const expenseGroups: Record<string, number> = {};
+    const dataSource = isAmortizedMode ? amortizedContributions : filteredTransactions;
     
-    filteredTransactions.forEach(t => {
+    dataSource.forEach(t => {
       if (t.tipo === 'gasto') {
-        expenseGroups[t.categoria] = (expenseGroups[t.categoria] || 0) + t.cantidad;
+        const amount = 'cantidadMensual' in t ? (t as any).cantidadMensual : t.cantidad;
+        expenseGroups[t.categoria] = (expenseGroups[t.categoria] || 0) + amount;
       }
     });
 
@@ -176,13 +203,21 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
         color: getCategoryColor(name)
       }))
       .sort((a, b) => b.value - a.value);
-  }, [filteredTransactions, categories]);
+  }, [filteredTransactions, amortizedContributions, isAmortizedMode, categories]);
 
   const summary = useMemo(() => {
-    const income = filteredTransactions.filter(t => t.tipo === 'ingreso').reduce((acc, curr) => acc + curr.cantidad, 0);
-    const expense = filteredTransactions.filter(t => t.tipo === 'gasto').reduce((acc, curr) => acc + curr.cantidad, 0);
+    const dataSource = isAmortizedMode ? amortizedContributions : filteredTransactions;
+    
+    const income = dataSource
+      .filter(t => t.tipo === 'ingreso')
+      .reduce((acc, t) => acc + ('cantidadMensual' in t ? (t as any).cantidadMensual : t.cantidad), 0);
+      
+    const expense = dataSource
+      .filter(t => t.tipo === 'gasto')
+      .reduce((acc, t) => acc + ('cantidadMensual' in t ? (t as any).cantidadMensual : t.cantidad), 0);
+      
     return { income, expense, net: income - expense };
-  }, [filteredTransactions]);
+  }, [filteredTransactions, amortizedContributions, isAmortizedMode]);
 
   const changeMonth = (delta: number) => {
     const newDate = new Date(viewDate);
@@ -251,7 +286,16 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
 
   const renderRow = (t: Transaction) => (
     <tr key={t.id} className={`hover:bg-gray-50 transition-colors border-b last:border-b-0 ${editingId === t.id ? 'bg-blue-50' : ''}`}>
-      <td className="p-4 text-sm text-gray-600">{formatDate(t.fecha)}</td>
+      <td className="p-4 text-sm text-gray-600">
+        <div className="flex flex-col">
+          {formatDate(t.fecha)}
+          {t.mesesCobertura && t.mesesCobertura > 1 && (
+            <span className="text-[10px] text-blue-500 font-bold uppercase tracking-tighter flex items-center gap-0.5">
+              <CalendarClock size={10} /> {t.mesesCobertura} meses
+            </span>
+          )}
+        </div>
+      </td>
       <td className="p-4 font-medium text-gray-900">
         <div className="flex items-center gap-2">
           {t.nombre}
@@ -306,34 +350,57 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <h2 className="text-2xl font-bold text-gray-800">Movimientos</h2>
-        <div className="flex items-center bg-white rounded-lg shadow-sm border p-1">
-          <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded-md"><ChevronLeft size={20} /></button>
-          <span className="px-4 font-semibold min-w-[150px] text-center">
-            {getMonthName(viewDate.getMonth())} {viewDate.getFullYear()}
-          </span>
-          <button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded-md"><ChevronRight size={20} /></button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-white rounded-lg shadow-sm border p-1">
+            <button onClick={() => changeMonth(-1)} className="p-2 hover:bg-gray-100 rounded-md transition-colors"><ChevronLeft size={20} /></button>
+            <span className="px-4 font-semibold min-w-[150px] text-center">
+              {getMonthName(viewDate.getMonth())} {viewDate.getFullYear()}
+            </span>
+            <button onClick={() => changeMonth(1)} className="p-2 hover:bg-gray-100 rounded-md transition-colors"><ChevronRight size={20} /></button>
+          </div>
+          <button 
+            onClick={() => setIsAmortizedMode(!isAmortizedMode)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all duration-200 text-sm font-bold ${
+              isAmortizedMode 
+                ? 'bg-blue-600 border-blue-600 text-white shadow-md' 
+                : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
+            }`}
+            title="Activa la vista prorrateada para ver el consumo económico real del mes"
+          >
+            <Zap size={16} className={isAmortizedMode ? 'fill-white' : ''} />
+            <span className="hidden sm:inline">Prorrateo</span>
+          </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border-l-4 border-l-green-500">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-green-100 text-green-600 rounded-full"><TrendingUp size={20} /></div>
-            <span className="text-gray-500 font-medium">Ingresos</span>
+        <Card className={`border-l-4 border-l-green-500 transition-all ${isAmortizedMode ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 text-green-600 rounded-full"><TrendingUp size={20} /></div>
+              <span className="text-gray-500 font-bold uppercase text-[10px] tracking-widest">Ingresos {isAmortizedMode ? '(Prorr.)' : '(Real)'}</span>
+            </div>
+            {isAmortizedMode && <Zap size={14} className="text-blue-500 animate-pulse" />}
           </div>
           <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.income)}</p>
         </Card>
-        <Card className="border-l-4 border-l-red-500">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-red-100 text-red-600 rounded-full"><TrendingDown size={20} /></div>
-            <span className="text-gray-500 font-medium">Gastos</span>
+        <Card className={`border-l-4 border-l-red-500 transition-all ${isAmortizedMode ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 text-red-600 rounded-full"><TrendingDown size={20} /></div>
+              <span className="text-gray-500 font-bold uppercase text-[10px] tracking-widest">Gastos {isAmortizedMode ? '(Prorr.)' : '(Real)'}</span>
+            </div>
+            {isAmortizedMode && <Zap size={14} className="text-blue-500 animate-pulse" />}
           </div>
           <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.expense)}</p>
         </Card>
-        <Card className={`border-l-4 ${summary.net >= 0 ? 'border-l-blue-500' : 'border-l-orange-500'}`}>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-blue-100 text-blue-600 rounded-full"><Filter size={20} /></div>
-            <span className="text-gray-500 font-medium">Balance Neto</span>
+        <Card className={`border-l-4 ${summary.net >= 0 ? 'border-l-blue-500' : 'border-l-orange-500'} transition-all ${isAmortizedMode ? 'ring-2 ring-blue-500 ring-opacity-50' : ''}`}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 text-blue-600 rounded-full"><Filter size={20} /></div>
+              <span className="text-gray-500 font-bold uppercase text-[10px] tracking-widest">Balance {isAmortizedMode ? '(Prorr.)' : '(Real)'}</span>
+            </div>
+            {isAmortizedMode && <Zap size={14} className="text-blue-500 animate-pulse" />}
           </div>
           <p className={`text-2xl font-bold ${summary.net >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
             {formatCurrency(summary.net)}
@@ -360,7 +427,8 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                 </Select>
                 <Input label="Fecha" type="date" value={formData.fecha} onChange={e => setFormData({...formData, fecha: e.target.value})} required />
               </div>
-              <Input label="Descripción" placeholder="Ej: Compra Mercadona" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} required />
+              <Input label="Descripción" placeholder="Ej: Seguro del coche" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} required />
+              
               <div className="grid grid-cols-2 gap-3">
                 <Select label="Categoría" value={formData.categoria} onChange={e => setFormData({...formData, categoria: e.target.value})}>
                   {sortedCategories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
@@ -374,11 +442,34 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                   required 
                 />
               </div>
+
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                <div className="flex items-center gap-2 mb-2">
+                  <CalendarClock size={16} className="text-blue-600" />
+                  <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Planificación</span>
+                </div>
+                <Select 
+                  label="Periodo de Cobertura" 
+                  value={formData.mesesCobertura} 
+                  onChange={e => setFormData({...formData, mesesCobertura: Number(e.target.value)})}
+                >
+                  <option value={1}>Gasto Puntual / Mensual</option>
+                  <option value={2}>Bimensual (2 meses)</option>
+                  <option value={3}>Trimestral (3 meses)</option>
+                  <option value={4}>Cuatrimestral (4 meses)</option>
+                  <option value={6}>Semestral (6 meses)</option>
+                  <option value={12}>Anual (12 meses)</option>
+                  <option value={24}>Bianual (24 meses)</option>
+                </Select>
+                <p className="text-[10px] text-blue-600 mt-2 italic">
+                  Si eliges > 1 mes, el gasto se repartirá visualmente en los meses siguientes al activar el modo "Prorrateo".
+                </p>
+              </div>
               
               <div className="flex flex-col gap-1">
                 <label className="text-sm font-medium text-gray-700">Notas</label>
                 <textarea 
-                  className="border-2 border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white text-gray-900 placeholder-gray-400 min-h-[80px]"
+                  className="border-2 border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white text-gray-900 placeholder-gray-400 min-h-[60px] text-sm"
                   placeholder="Detalles adicionales (opcional)..."
                   value={formData.notas}
                   onChange={e => setFormData({...formData, notas: e.target.value})}
@@ -452,10 +543,15 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border overflow-hidden min-h-[400px]">
-             {filteredTransactions.length === 0 ? (
-                <div className="p-12 text-center text-gray-500">No hay movimientos este mes</div>
+             {filteredTransactions.length === 0 && !isAmortizedMode ? (
+                <div className="p-12 text-center text-gray-500">No hay movimientos reales registrados este mes</div>
              ) : viewMode === 'list' ? (
               <div className="overflow-x-auto">
+                {isAmortizedMode && (
+                  <div className="bg-blue-50 p-3 text-xs text-blue-700 font-medium flex items-center gap-2 border-b border-blue-100">
+                    <Info size={14} /> La lista sigue mostrando movimientos reales. Los números de arriba reflejan el prorrateo.
+                  </div>
+                )}
                 <table className="w-full text-left">
                   <TableHeader />
                   <tbody className="divide-y">
@@ -508,7 +604,14 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                </div>
              ) : (
                 <div className="p-6 h-full flex flex-col items-center justify-center">
-                  <h3 className="text-lg font-bold text-gray-700 mb-4 self-start">Distribución de Gastos por Categoría</h3>
+                  <div className="flex justify-between items-center w-full mb-4">
+                    <h3 className="text-lg font-bold text-gray-700">Distribución de Gastos por Categoría</h3>
+                    {isAmortizedMode && (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-full uppercase">
+                        <Zap size={10} /> Datos Prorrateados
+                      </span>
+                    )}
+                  </div>
                   {chartData.length > 0 ? (
                     <div className="w-full h-[350px]">
                       <ResponsiveContainer width="100%" height="100%">
@@ -528,7 +631,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                           <Tooltip 
                             cursor={{fill: 'transparent'}}
                             contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                            formatter={(value: number) => [formatCurrency(value), 'Gastado']}
+                            formatter={(value: number) => [formatCurrency(value), 'Valor ' + (isAmortizedMode ? 'Prorrateado' : 'Real')]}
                           />
                           <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={24}>
                             {chartData.map((entry, index) => (
@@ -541,7 +644,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                   ) : (
                     <div className="flex flex-col items-center justify-center h-64 text-gray-400">
                       <BarChart3 size={48} className="mb-2 opacity-20" />
-                      <p>No hay gastos registrados para este mes.</p>
+                      <p>No hay datos para mostrar en este modo.</p>
                     </div>
                   )}
                 </div>
