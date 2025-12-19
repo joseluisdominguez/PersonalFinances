@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import { Plus, Edit2, Trash2, PiggyBank, Coins, History, X, Calendar, TrendingUp, Info, MinusCircle, Wallet, ArrowUpCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, PiggyBank, Coins, History, X, Calendar, TrendingUp, Info, MinusCircle, Wallet, ArrowUpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Investment, InvestmentType, InterestPayment, PaymentType } from '../types';
 import { Button, Card, Input, Select, ConfirmDialog, TextArea } from './ui';
 import { formatCurrency, formatDate, generateId, getMonthName } from '../utils';
@@ -20,7 +20,8 @@ const TYPES: {value: InvestmentType, label: string}[] = [
 ];
 
 export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => {
-  // Main Form State
+  // Main State
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -47,21 +48,26 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
   // --- Helpers ---
   const isCashflowType = (type: InvestmentType) => type === 'cuenta_remunerada' || type === 'deposito';
 
-  const getProfit = (item: Investment) => {
+  // Get total profit (all time) for individual cards
+  const getProfitAllTime = (item: Investment) => {
     if (isCashflowType(item.tipo)) {
-      // For bank accounts/deposits, profit is just the sum of interest payments
       return (item.historialPagos || [])
         .filter(p => p.tipo === 'interes')
         .reduce((acc, pay) => acc + pay.cantidad, 0);
     }
     if (item.tipo === 'privada') {
-      // For private investments, profit is the sum of benefit/loss entries
       return (item.historialPagos || [])
         .filter(p => p.tipo === 'beneficio')
         .reduce((acc, pay) => acc + pay.cantidad, 0);
     }
-    // For indexed portfolios, profit is market value minus cost basis
     return item.valorActual - item.capitalInvertido;
+  };
+
+  // Get profit specifically for a year (used in dashboard summary)
+  const getProfitByYear = (item: Investment, year: number) => {
+    return (item.historialPagos || [])
+      .filter(p => (p.tipo === 'interes' || p.tipo === 'beneficio') && new Date(p.fecha).getFullYear() === year)
+      .reduce((acc, pay) => acc + pay.cantidad, 0);
   };
 
   // --- Main CRUD Handlers ---
@@ -124,12 +130,10 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
 
     if (modalType === 'retiro') {
       newValorActual -= amount;
-      // "En las carteras y solo en las carteras (indexadas), restar también del capital invertido"
       if (investment.tipo === 'cartera_indexada') {
         newCapitalInvertido -= amount;
       }
     } else if (modalType === 'aportacion') {
-      // "Añadir botón aportación a las carteras y solo a las carteras que sume al capital actual e invertido"
       newValorActual += amount;
       if (investment.tipo === 'cartera_indexada') {
         newCapitalInvertido += amount;
@@ -161,7 +165,6 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
 
     if (itemToDelete.tipo === 'retiro') {
       newValorActual += itemToDelete.cantidad;
-      // Restore capital if it was a portfolio withdrawal
       if (investment.tipo === 'cartera_indexada') {
         newCapitalInvertido += itemToDelete.cantidad;
       }
@@ -185,47 +188,46 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
 
   const summary = useMemo(() => {
     const totalValue = data.reduce((a, b) => a + b.valorActual, 0);
-    const totalInvested = data.reduce((a, b) => a + b.capitalInvertido, 0);
-    const totalProfit = data.reduce((acc, item) => acc + getProfit(item), 0);
-    const roi = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
+    const totalProfitYear = data.reduce((acc, item) => acc + getProfitByYear(item, selectedYear), 0);
+    const totalInvestedYear = data.reduce((acc, item) => {
+        const invDate = new Date(item.fecha);
+        // Consideramos la inversión si se creó o actualizó antes o durante el año seleccionado
+        if (invDate.getFullYear() <= selectedYear) return acc + item.capitalInvertido;
+        return acc;
+    }, 0);
     
-    return { totalInvested, totalValue, totalProfit, roi };
-  }, [data]);
+    const roiYear = totalInvestedYear > 0 ? (totalProfitYear / totalInvestedYear) * 100 : 0;
+    
+    return { totalValue, totalProfitYear, roiYear };
+  }, [data, selectedYear]);
 
   const profitChartData = useMemo(() => {
-    const months: Record<string, number> = {};
-    
-    for (let i = 11; i >= 0; i--) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - i);
-        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        months[key] = 0;
+    // Generar los 12 meses del año seleccionado para el gráfico
+    const months: {name: string, value: number}[] = [];
+    for (let m = 0; m < 12; m++) {
+        months.push({ name: getMonthName(m).substring(0, 3), value: 0 });
     }
 
     data.forEach(inv => {
         if (inv.historialPagos) {
             inv.historialPagos.forEach(pay => {
                 if (pay.tipo === 'interes' || pay.tipo === 'beneficio') {
-                    const date = new Date(pay.fecha);
-                    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-                    if (months[key] !== undefined) {
-                         months[key] = (months[key] || 0) + pay.cantidad;
+                    const payDate = new Date(pay.fecha);
+                    if (payDate.getFullYear() === selectedYear) {
+                         const monthIndex = payDate.getMonth();
+                         months[monthIndex].value += pay.cantidad;
                     }
                 }
             });
         }
     });
 
-    return Object.entries(months)
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([key, value]) => {
-            const [y, m] = key.split('-');
-            return {
-                name: `${getMonthName(parseInt(m)-1).substring(0,3)} ${y.substring(2)}`,
-                value
-            };
-        });
-  }, [data]);
+    return months;
+  }, [data, selectedYear]);
+
+  const changeYear = (delta: number) => {
+    setSelectedYear(prev => prev + delta);
+  };
 
   const renderSpecificFields = () => {
     switch(formData.tipo) {
@@ -273,38 +275,46 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-2xl font-bold text-gray-800">Cartera de Inversiones</h2>
-        <Button onClick={handleNew}><Plus size={18} /> Nueva Inversión</Button>
+        
+        <div className="flex items-center gap-4">
+            <div className="flex items-center bg-white rounded-lg shadow-sm border p-1">
+                <button onClick={() => changeYear(-1)} className="p-2 hover:bg-gray-100 rounded-md text-gray-500 transition-colors"><ChevronLeft size={20} /></button>
+                <span className="px-4 font-bold min-w-[80px] text-center text-gray-700">
+                    {selectedYear}
+                </span>
+                <button onClick={() => changeYear(1)} className="p-2 hover:bg-gray-100 rounded-md text-gray-500 transition-colors"><ChevronRight size={20} /></button>
+            </div>
+            <Button onClick={handleNew}><Plus size={18} /> Nueva Inversión</Button>
+        </div>
       </div>
 
       {/* Dashboard Top */}
       <div className="flex flex-col gap-6">
-         {/* Summary Numbers Row */}
          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white border-none">
-                <p className="text-blue-100 text-sm font-medium mb-1">Valor Total Activos</p>
+            <Card className="bg-gradient-to-br from-blue-600 to-blue-700 text-white border-none shadow-md">
+                <p className="text-blue-100 text-xs font-bold mb-1 uppercase tracking-wider">Valor Total Activos (Hoy)</p>
                 <p className="text-3xl font-bold">{formatCurrency(summary.totalValue)}</p>
             </Card>
-            <Card className="border-l-4 border-l-green-500">
-                <p className="text-gray-500 text-sm font-medium mb-1">Beneficio Total Acumulado</p>
+            <Card className="border-l-4 border-l-green-500 shadow-sm">
+                <p className="text-gray-500 text-xs font-bold mb-1 uppercase tracking-wider">Ben. Recibido en {selectedYear}</p>
                 <p className="text-3xl font-bold text-green-600">
-                    {summary.totalProfit >= 0 ? '+' : ''}{formatCurrency(summary.totalProfit)}
+                    {summary.totalProfitYear >= 0 ? '+' : ''}{formatCurrency(summary.totalProfitYear)}
                 </p>
             </Card>
-            <Card className="border-l-4 border-l-indigo-500">
-                <p className="text-gray-500 text-sm font-medium mb-1">Rentabilidad Media (ROI)</p>
+            <Card className="border-l-4 border-l-indigo-500 shadow-sm">
+                <p className="text-gray-500 text-xs font-bold mb-1 uppercase tracking-wider">ROI {selectedYear}</p>
                 <div className="flex items-center gap-2">
-                   <p className="text-3xl font-bold text-indigo-600">{summary.roi.toFixed(1)}%</p>
+                   <p className="text-3xl font-bold text-indigo-600">{summary.roiYear.toFixed(2)}%</p>
                    <TrendingUp className="text-indigo-400" size={24} />
                 </div>
             </Card>
          </div>
 
-         {/* Profit Chart */}
-         <Card className="flex flex-col">
+         <Card className="flex flex-col shadow-sm">
             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-800">Intereses y Beneficios Recibidos</h3>
-                    <p className="text-sm text-gray-500">Rendimientos mensuales de tus inversiones (No incluye plusvalías latentes)</p>
+                    <h3 className="text-lg font-bold text-gray-800">Rendimientos en {selectedYear}</h3>
+                    <p className="text-sm text-gray-500">Cobros e intereses de Enero a Diciembre</p>
                 </div>
                 <div className="p-3 bg-green-50 text-green-600 rounded-xl">
                     <Coins size={24} />
@@ -358,8 +368,8 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
             </h3>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
               {items.map(item => {
-                const profit = getProfit(item);
-                const profitPct = item.capitalInvertido > 0 ? (profit / item.capitalInvertido) * 100 : null;
+                const profitAllTime = getProfitAllTime(item);
+                const profitPctAllTime = item.capitalInvertido > 0 ? (profitAllTime / item.capitalInvertido) * 100 : null;
                 
                 return (
                 <Card key={item.id} className="relative hover:shadow-md transition-shadow group flex flex-col border-gray-100">
@@ -397,23 +407,23 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                              <p className="text-xs text-gray-500 mb-0.5 uppercase tracking-wider font-semibold">
-                               {isCashflow ? 'Saldo Actual' : 'Valor Actual'}
+                               Saldo Actual
                              </p>
                              <p className="font-bold text-xl text-gray-900">{formatCurrency(item.valorActual)}</p>
                         </div>
                         <div className="text-right">
                              <p className="text-xs text-gray-500 mb-0.5 uppercase tracking-wider font-semibold">
-                               Beneficio
+                               Ben. Acumulado
                              </p>
                              <div className="flex flex-col items-end gap-1">
-                                <p className={`font-bold text-xl leading-tight ${profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {profit > 0 && '+'}{formatCurrency(profit)}
+                                <p className={`font-bold text-xl leading-tight ${profitAllTime >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                    {profitAllTime > 0 && '+'}{formatCurrency(profitAllTime)}
                                 </p>
-                                {profitPct !== null && (
+                                {profitPctAllTime !== null && (
                                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase ${
-                                    profitPct >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                    profitPctAllTime >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                                   }`}>
-                                    {profitPct > 0 && '+'}{profitPct.toFixed(2)}%
+                                    {profitPctAllTime > 0 && '+'}{profitPctAllTime.toFixed(2)}%
                                   </span>
                                 )}
                              </div>
@@ -535,8 +545,8 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                 <TextArea 
                   label="Notas"
                   placeholder="Detalles adicionales sobre esta inversión..."
-                  value={formData.notas}
-                  onChange={e => setFormData({...formData, notas: e.target.value})}
+                  value={formData.notes}
+                  onChange={e => setFormData({...formData, notes: e.target.value})}
                 />
               </div>
               
@@ -549,7 +559,7 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
         </div>
       )}
 
-      {/* 2. Generic Action Modal (Interest, Benefit, Withdrawal, Contribution) */}
+      {/* 2. Generic Action Modal */}
       {modalType !== 'none' && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
            <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 animate-in fade-in zoom-in duration-200">
@@ -619,21 +629,21 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                             <div key={pay.id} className="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50 group">
                                 <div className="flex items-center gap-3">
                                     <div className={`${
-                                      pay.tipo === 'retiro' ? 'bg-orange-100 text-orange-700' : 
-                                      pay.tipo === 'aportacion' ? 'bg-blue-100 text-blue-700' :
+                                      pay.type === 'retiro' ? 'bg-orange-100 text-orange-700' : 
+                                      pay.type === 'aportacion' ? 'bg-blue-100 text-blue-700' :
                                       'bg-green-100 text-green-700'
                                     } p-2 rounded-full`}>
-                                        {pay.tipo === 'retiro' ? <MinusCircle size={14} /> : 
-                                         pay.tipo === 'aportacion' ? <ArrowUpCircle size={14} /> :
+                                        {pay.type === 'retiro' ? <MinusCircle size={14} /> : 
+                                         pay.type === 'aportacion' ? <ArrowUpCircle size={14} /> :
                                          <Calendar size={14} />}
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-2">
-                                          <p className={`font-bold ${pay.tipo === 'retiro' ? 'text-orange-600' : pay.tipo === 'aportacion' ? 'text-blue-600' : 'text-gray-900'}`}>
-                                            {pay.tipo === 'retiro' ? '-' : '+'}{formatCurrency(pay.cantidad)}
+                                          <p className={`font-bold ${pay.type === 'retiro' ? 'text-orange-600' : pay.type === 'aportacion' ? 'text-blue-600' : 'text-gray-900'}`}>
+                                            {pay.type === 'retiro' ? '-' : '+'}{formatCurrency(pay.cantidad)}
                                           </p>
                                           <span className="text-[10px] uppercase font-bold text-gray-400 border px-1 rounded">
-                                            {pay.tipo === 'interes' ? 'Liquidación' : pay.tipo}
+                                            {pay.type === 'interes' ? 'Liquidación' : pay.type}
                                           </span>
                                         </div>
                                         <p className="text-xs text-gray-500">{formatDate(pay.fecha)} {pay.nota ? `• ${pay.nota}` : ''}</p>

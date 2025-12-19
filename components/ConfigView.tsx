@@ -100,7 +100,9 @@ export const ConfigView: React.FC<Props> = ({ config, onSave }) => {
           </form>
 
           <div className="flex-1 overflow-y-auto max-h-[400px] space-y-2 pr-2">
-            {config.categories.map(cat => (
+            {[...config.categories]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map(cat => (
               <div key={cat.name} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border group hover:border-blue-200 transition-colors">
                 <div className="flex items-center gap-3">
                    <div 
@@ -145,7 +147,9 @@ export const ConfigView: React.FC<Props> = ({ config, onSave }) => {
           </form>
 
           <div className="flex-1 overflow-y-auto max-h-[400px] space-y-2 pr-2">
-            {config.banks.map(bank => (
+            {[...config.banks]
+              .sort((a, b) => a.localeCompare(b))
+              .map(bank => (
               <div key={bank} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border group hover:border-blue-200 transition-colors">
                 <span className="font-medium text-gray-700">{bank}</span>
                 <button 

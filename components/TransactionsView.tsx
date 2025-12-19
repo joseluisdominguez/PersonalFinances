@@ -36,9 +36,13 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
   const [groupSortConfigs, setGroupSortConfigs] = useState<Record<string, SortConfig>>({});
   
   // Form State
+  const sortedCategories = useMemo(() => 
+    [...categories].sort((a, b) => a.name.localeCompare(b.name)),
+  [categories]);
+
   const initialFormState = {
     tipo: 'gasto' as TransactionType,
-    categoria: categories.length > 0 ? categories[0].name : 'Otros',
+    categoria: sortedCategories.length > 0 ? sortedCategories[0].name : 'Otros',
     fecha: new Date().toISOString().split('T')[0],
     nombre: '',
     cantidad: 0,
@@ -66,7 +70,14 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
       notas: formData.notas
     } as Transaction);
 
-    setFormData(initialFormState);
+    // PERSISTIR: Fecha, Tipo y Categoría. LIMPIAR: Nombre, Cantidad, Notas.
+    setFormData(prev => ({
+      ...prev,
+      nombre: '',
+      cantidad: 0,
+      notas: ''
+    }));
+    
     setEditingId(null);
   };
 
@@ -80,7 +91,6 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
       cantidad: t.cantidad,
       notas: t.notas || ''
     });
-    // Optional: Scroll to top to see form
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -91,11 +101,9 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
 
   const handleSort = (key: keyof Transaction, category?: string) => {
     const cycleSort = (current: SortConfig | undefined): SortConfig => {
-      // If clicking a new key, start with Asc
       if (!current || current.key !== key) {
         return { key, direction: 'asc' };
       }
-      // Cycle: Asc -> Desc -> Null (Off) -> Asc
       if (current.direction === 'asc') return { key, direction: 'desc' };
       if (current.direction === 'desc') return { key, direction: null };
       return { key, direction: 'asc' };
@@ -118,7 +126,6 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
     return t[key];
   };
 
-  // 1. Base Filter
   const filteredTransactions = useMemo(() => {
     return data.filter(t => {
       const tDate = new Date(t.fecha);
@@ -128,10 +135,8 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
     });
   }, [data, viewDate, filterType]);
 
-  // 2. Sorted List Data
   const listData = useMemo(() => {
     if (!listSortConfig.direction) {
-      // Return reversed array to show newest created (last added) first
       return [...filteredTransactions].reverse();
     }
 
@@ -146,7 +151,6 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
     return sorted;
   }, [filteredTransactions, listSortConfig]);
 
-  // 3. Grouped Data
   const groupedData = useMemo(() => {
     const groups: Record<string, Transaction[]> = {};
     filteredTransactions.forEach(t => {
@@ -156,7 +160,6 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
     return groups;
   }, [filteredTransactions]);
 
-  // 4. Chart Data
   const chartData = useMemo(() => {
     const expenseGroups: Record<string, number> = {};
     
@@ -172,7 +175,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
         value,
         color: getCategoryColor(name)
       }))
-      .sort((a, b) => b.value - a.value); // Order by highest expense
+      .sort((a, b) => b.value - a.value);
   }, [filteredTransactions, categories]);
 
   const summary = useMemo(() => {
@@ -255,9 +258,8 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
           {t.notas && (
             <div className="group relative">
               <Info size={16} className="text-gray-400 cursor-help" />
-              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-gray-800 text-white text-xs rounded z-10 shadow-lg pointer-events-none">
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-gray-800 text-white text-xs rounded z-10 shadow-lg pointer-events-none text-center">
                 {t.notas}
-                {/* Little arrow for tooltip */}
                 <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
               </div>
             </div>
@@ -302,7 +304,6 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
 
   return (
     <div className="space-y-8">
-      {/* Header & Date Nav */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <h2 className="text-2xl font-bold text-gray-800">Movimientos</h2>
         <div className="flex items-center bg-white rounded-lg shadow-sm border p-1">
@@ -314,7 +315,6 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card className="border-l-4 border-l-green-500">
           <div className="flex items-center gap-3 mb-2">
@@ -342,7 +342,6 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* Form */}
         <div className="lg:col-span-1">
           <Card className={editingId ? 'ring-2 ring-blue-500' : ''}>
             <div className="flex justify-between items-center mb-4">
@@ -364,13 +363,12 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
               <Input label="Descripción" placeholder="Ej: Compra Mercadona" value={formData.nombre} onChange={e => setFormData({...formData, nombre: e.target.value})} required />
               <div className="grid grid-cols-2 gap-3">
                 <Select label="Categoría" value={formData.categoria} onChange={e => setFormData({...formData, categoria: e.target.value})}>
-                  {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                  {sortedCategories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                 </Select>
                 <Input 
                   label="Cantidad (€)" 
                   type="number" 
                   step="0.01" 
-                  // If 0, show empty string to make typing easier
                   value={formData.cantidad === 0 ? '' : formData.cantidad} 
                   onChange={e => setFormData({...formData, cantidad: Number(e.target.value)})} 
                   required 
@@ -402,10 +400,8 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
           </Card>
         </div>
 
-        {/* List / Chart / Grouped Toggle */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            {/* Filter Buttons */}
             <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
               <button 
                 onClick={() => setFilterType('all')} 
@@ -427,7 +423,6 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
               </button>
             </div>
 
-            {/* View Mode Toggle */}
             <div className="flex gap-2 bg-gray-100 p-1 rounded-lg">
                <button 
                 onClick={() => setViewMode('list')} 
@@ -460,7 +455,6 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
              {filteredTransactions.length === 0 ? (
                 <div className="p-12 text-center text-gray-500">No hay movimientos este mes</div>
              ) : viewMode === 'list' ? (
-              /* LIST VIEW */
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <TableHeader />
@@ -470,14 +464,13 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                 </table>
               </div>
              ) : viewMode === 'grouped' ? (
-               /* GROUPED VIEW */
                <div className="p-4 space-y-4 bg-gray-50 min-h-full">
-                 {Object.entries(groupedData).map(([category, items]: [string, Transaction[]]) => {
+                 {Object.entries(groupedData)
+                  .sort((a, b) => a[0].localeCompare(b[0]))
+                  .map(([category, items]: [string, Transaction[]]) => {
                    const isExpanded = expandedCategories.includes(category);
                    const subtotal = items.reduce((acc, curr) => curr.tipo === 'ingreso' ? acc + curr.cantidad : acc - curr.cantidad, 0);
                    const catColor = getCategoryColor(category);
-
-                   // Sort items for this specific category based on its local config
                    const categoryConfig = groupSortConfigs[category] || { key: 'fecha', direction: null };
                    const sortedItems = getSortedItems(items, categoryConfig);
 
@@ -491,10 +484,7 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                             <span className="p-1 bg-white border rounded-md shadow-sm">
                               {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                             </span>
-                            
-                            {/* Category Colored Circle */}
                             <div className="w-4 h-4 rounded-full" style={{ backgroundColor: catColor }}></div>
-                            
                             <span className="font-bold text-gray-800">{category}</span>
                             <span className="text-xs px-2 py-0.5 bg-gray-200 rounded-full text-gray-600">{items.length}</span>
                          </div>
@@ -502,7 +492,6 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                            {formatCurrency(subtotal)}
                          </div>
                        </button>
-                       
                        {isExpanded && (
                          <div className="border-t overflow-x-auto">
                             <table className="w-full text-left">
@@ -518,7 +507,6 @@ export const TransactionsView: React.FC<Props> = ({ data, categories, onSave, on
                  })}
                </div>
              ) : (
-                /* CHART VIEW */
                 <div className="p-6 h-full flex flex-col items-center justify-center">
                   <h3 className="text-lg font-bold text-gray-700 mb-4 self-start">Distribución de Gastos por Categoría</h3>
                   {chartData.length > 0 ? (
