@@ -3,22 +3,36 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Finanzas Personales Pro</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Google APIs -->
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
-      body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
-      ::-webkit-scrollbar { width: 6px; height: 6px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background-color: #d1d5db; border-radius: 20px; }
-      .no-scrollbar::-webkit-scrollbar { display: none; }
-      header { padding-top: env(safe-area-inset-top); }
+      body { font-family: 'Inter', sans-serif; }
+
+      /* Custom Scrollbar Styling */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background-color: #d1d5db; /* gray-300 */
+        border-radius: 20px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background-color: #9ca3af; /* gray-400 */
+      }
+
+      /* Firefox */
+      * {
+        scrollbar-width: thin;
+        scrollbar-color: #d1d5db transparent;
+      }
     </style>
     <script type="importmap">
 {
@@ -34,15 +48,8 @@
 }
 </script>
   </head>
-  <body class="bg-gray-50 text-gray-900 overflow-x-hidden">
+  <body class="bg-gray-50 text-gray-900">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW error:', err));
-        });
-      }
-    </script>
   </body>
 </html>

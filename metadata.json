@@ -1,18 +1,5 @@
 {
-  "name": "Finanzas Pro",
-  "short_name": "Finanzas",
-  "description": "Gestión financiera personal avanzada con sincronización remota.",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#F9FAFB",
-  "theme_color": "#2563EB",
-  "icons": [
-    {
-      "src": "https://cdn-icons-png.flaticon.com/512/584/584026.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
-  ],
+  "name": "Finanzas Personales Pro",
+  "description": "Aplicación integral para la gestión de gastos, ingresos, balances bancarios y seguimiento de inversiones.",
   "requestFramePermissions": []
 }
