@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Wallet, TrendingUp, Download, Upload, PieChart, CheckCircle2, XCircle, Settings } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { LayoutDashboard, Wallet, TrendingUp, Download, Upload, PieChart, CheckCircle2, XCircle, Settings, Cloud, CloudOff, Share2, Link } from 'lucide-react';
 import { AppData, Transaction, Balance, Investment, AppConfig, CategoryItem } from './types';
 import { TransactionsView } from './components/TransactionsView';
 import { BalanceView } from './components/BalanceView';
@@ -25,45 +25,21 @@ const DEFAULT_CONFIG: AppConfig = {
   banks: ['Ibercaja', 'ING', 'Unicaja', 'Otras Cuentas']
 };
 
-const getMockData = (): AppData => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = (d: number) => String(d).padStart(2, '0');
-  const ym = `${year}-${month}`;
-
-  const prevDate = new Date();
-  prevDate.setMonth(prevDate.getMonth() - 1);
-  const prevY = prevDate.getFullYear();
-  const prevM = String(prevDate.getMonth() + 1).padStart(2, '0');
-  
-  const prev2Date = new Date();
-  prev2Date.setMonth(prev2Date.getMonth() - 2);
-  const prev2Y = prev2Date.getFullYear();
-  const prev2M = String(prev2Date.getMonth() + 1).padStart(2, '0');
-
-  return {
-    config: DEFAULT_CONFIG,
-    movimientos: [
-      { id: 'm1', fecha: `${ym}-${day(1)}`, nombre: 'Nómina Mensual', tipo: 'ingreso', categoria: 'Salario', cantidad: 2450.00 },
-      { id: 'm2', fecha: `${ym}-${day(2)}`, nombre: 'Alquiler Piso', tipo: 'gasto', categoria: 'Vivienda', cantidad: 850.00 },
-      { id: 'm3', fecha: `${ym}-${day(4)}`, nombre: 'Compra Semanal', tipo: 'gasto', categoria: 'Supermercado', cantidad: 124.35 },
-      { id: 'm4', fecha: `${ym}-${day(5)}`, nombre: 'Spotify', tipo: 'gasto', categoria: 'Ocio', cantidad: 17.99 },
-    ],
-    balances: [
-      { id: `${prev2Y}-${prev2M}`, mes: Number(prev2M), anio: prev2Y, cuentas: { 'Ibercaja': 11800 }, total: 11800 },
-      { id: `${prevY}-${prevM}`, mes: Number(prevM), anio: prevY, cuentas: { 'Ibercaja': 12500 }, total: 12500 }
-    ],
-    inversiones: []
-  };
-};
-
-const INITIAL_DATA = getMockData();
+const getMockData = (): AppData => ({
+  config: DEFAULT_CONFIG,
+  movimientos: [],
+  balances: [],
+  inversiones: []
+});
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'movimientos' | 'balances' | 'inversiones' | 'config'>('movimientos');
-  const [data, setData] = useState<AppData>(INITIAL_DATA);
+  const [data, setData] = useState<AppData>(getMockData());
   const [notification, setNotification] = useState<{msg: string, type: 'success'|'error'} | null>(null);
+  
+  // File System API State (Mac/PC)
+  const [fileHandle, setFileHandle] = useState<any>(null);
+  const [isSavingToFile, setIsSavingToFile] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -73,192 +49,233 @@ export default function App() {
         if (!parsed.config) parsed.config = DEFAULT_CONFIG;
         setData(parsed);
       } catch (e) {
-        setData(INITIAL_DATA);
+        setData(getMockData());
       }
     }
   }, []);
-
-  const saveData = (newData: AppData) => {
-    setData(newData);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
-  };
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setNotification({ msg, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const handleSaveTransaction = (t: Transaction) => {
-    const exists = data.movimientos.some(m => m.id === t.id);
-    const newMovimientos = exists ? data.movimientos.map(m => m.id === t.id ? t : m) : [...data.movimientos, t];
-    saveData({ ...data, movimientos: newMovimientos });
-    showToast("Movimiento guardado");
+  const saveData = async (newData: AppData) => {
+    setData(newData);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+
+    // Autosave si hay un archivo vinculado (Desktop/Mac)
+    if (fileHandle) {
+      try {
+        setIsSavingToFile(true);
+        const writable = await fileHandle.createWritable();
+        await writable.write(JSON.stringify(newData, null, 2));
+        await writable.close();
+      } catch (err) {
+        console.error("Error autosaving to file:", err);
+        setFileHandle(null); // Desvincular si falla el permiso
+        showToast("Error al guardar en el archivo vinculado", "error");
+      } finally {
+        setIsSavingToFile(false);
+      }
+    }
   };
 
-  const handleDeleteTransaction = (id: string) => {
-    saveData({ ...data, movimientos: data.movimientos.filter(m => m.id !== id) });
-    showToast("Movimiento eliminado");
+  // --- Remote Persistence Handlers ---
+
+  const handleLinkFile = async () => {
+    try {
+      // @ts-ignore - File System Access API
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: 'JSON Backup', accept: { 'application/json': ['.json'] } }],
+        multiple: false
+      });
+      
+      const file = await handle.getFile();
+      const content = await file.text();
+      const json = JSON.parse(content);
+      
+      if (window.confirm("¿Vincular archivo y cargar datos? Se reemplazará lo actual.")) {
+        setFileHandle(handle);
+        saveData(json);
+        showToast("Archivo vinculado: Autosave activado");
+      }
+    } catch (err) {
+      console.log("File link cancelled or failed");
+    }
   };
 
-  const handleSaveBalance = (b: Balance) => {
-    const filtered = data.balances.filter(item => item.id !== b.id);
-    saveData({ ...data, balances: [...filtered, b] });
-    showToast("Balance actualizado");
-  };
-
-  const handleDeleteBalance = (id: string) => {
-    saveData({ ...data, balances: data.balances.filter(b => b.id !== id) });
-    showToast("Balance eliminado");
-  };
-
-  const handleSaveInvestment = (i: Investment) => {
-    const filtered = data.inversiones.filter(item => item.id !== i.id);
-    saveData({ ...data, inversiones: [...filtered, i] });
-    showToast("Inversión guardada");
-  };
-
-  const handleDeleteInvestment = (id: string) => {
-    saveData({ ...data, inversiones: data.inversiones.filter(i => i.id !== id) });
-    showToast("Inversión eliminada");
-  };
-
-  const handleSaveConfig = (newConfig: AppConfig) => {
-    saveData({ ...data, config: newConfig });
-    showToast("Configuración guardada");
-  };
-
-  const handleExport = () => {
+  const handleCloudPush = async () => {
     const dataStr = JSON.stringify(data, null, 2);
-    const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `finanzas_backup_${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    
+    // Si estamos en móvil (iOS), usamos Share API para "Guardar en Archivos" o Drive
+    if (navigator.share) {
+      const file = new File([dataStr], `finanzas_backup.json`, { type: 'application/json' });
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Backup de Finanzas',
+          text: 'Sincroniza tus datos con iCloud/Drive'
+        });
+        showToast("Sincronización enviada");
+      } catch (err) {
+        console.log("Share cancelled");
+      }
+    } else {
+      // Fallback: Exportación normal
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `finanzas_backup.json`;
+      link.click();
+    }
   };
 
-  // Importación mejorada para iOS y Safari móvil
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     try {
-      // Usar API de texto moderna más fiable en iOS
       const text = await file.text();
       const json = JSON.parse(text);
-
-      // Verificación básica del formato
-      if (!json.movimientos || !Array.isArray(json.movimientos)) {
-        throw new Error("El archivo no parece ser un backup válido.");
-      }
-
-      if (window.confirm("¿Importar backup? Se reemplazarán todos los datos actuales.")) {
-        if (!json.config) json.config = DEFAULT_CONFIG;
+      if (window.confirm("¿Importar datos?")) {
         saveData(json);
-        showToast("Datos importados con éxito");
+        showToast("Datos importados");
       }
     } catch (err) {
-      console.error("Error importando:", err);
-      showToast("Error al leer el archivo. Asegúrate de que sea un JSON válido.", 'error');
-    } finally {
-      e.target.value = ''; // Resetear el input para permitir re-seleccionar el mismo archivo
+      showToast("Error al importar", "error");
     }
+    e.target.value = '';
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-32">
-      <header className="bg-white border-b sticky top-0 z-30 shadow-sm">
+      <header className="bg-white border-b sticky top-0 z-30 shadow-sm transition-all duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('movimientos')}>
-            <div className="bg-blue-600 p-2 rounded-lg text-white">
-              <PieChart size={24} />
+            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-md shadow-blue-100">
+              <PieChart size={22} />
             </div>
-            <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-green-500">
+            <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 hidden sm:block">
               Finanzas Pro
             </h1>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
+            {/* Indicador de Autosave */}
+            <button 
+              onClick={handleLinkFile}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${
+                fileHandle 
+                ? 'bg-green-50 text-green-700 border-green-200' 
+                : 'bg-gray-50 text-gray-400 border-gray-200 hover:border-blue-300 hover:text-blue-500'
+              }`}
+              title={fileHandle ? "Autosave Activo en archivo local" : "Vincular a archivo local (Desktop)"}
+            >
+              {isSavingToFile ? <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" /> : fileHandle ? <Cloud size={14} /> : <CloudOff size={14} />}
+              <span className="hidden md:inline">{fileHandle ? 'Autosave ON' : 'Vincular Sync'}</span>
+            </button>
+
+            <div className="h-6 w-px bg-gray-200 mx-1"></div>
+
+            <button onClick={handleCloudPush} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors" title="Sincronizar a Nube (iOS/Share)">
+              <Share2 size={20} />
+            </button>
+
+            <label className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors cursor-pointer" title="Importar JSON">
+              <Upload size={20} />
+              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+            </label>
+
             <button 
               onClick={() => setActiveTab('config')} 
-              className={`p-2 rounded-lg transition-colors ${activeTab === 'config' ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'}`}
-              title="Configuración"
+              className={`p-2 rounded-xl transition-colors ${activeTab === 'config' ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'}`}
+              title="Ajustes"
             >
               <Settings size={20} />
             </button>
-            <div className="h-6 w-px bg-gray-200 mx-1"></div>
-            <button onClick={handleExport} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Exportar Backup">
-              <Download size={20} />
-            </button>
-            <label className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" title="Importar Backup">
-              <Upload size={20} />
-              <input 
-                type="file" 
-                accept=".json,application/json" 
-                onChange={handleImport} 
-                className="hidden" 
-              />
-            </label>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
         {activeTab === 'movimientos' && (
           <TransactionsView 
             data={data.movimientos} 
             categories={data.config.categories}
-            onSave={handleSaveTransaction} 
-            onDelete={handleDeleteTransaction} 
+            onSave={(t) => {
+              const exists = data.movimientos.some(m => m.id === t.id);
+              saveData({ ...data, movimientos: exists ? data.movimientos.map(m => m.id === t.id ? t : m) : [...data.movimientos, t] });
+              showToast("Movimiento guardado");
+            }} 
+            onDelete={(id) => {
+              saveData({ ...data, movimientos: data.movimientos.filter(m => m.id !== id) });
+              showToast("Movimiento eliminado");
+            }} 
           />
         )}
         {activeTab === 'balances' && (
           <BalanceView 
             data={data.balances} 
             banks={data.config.banks}
-            onSave={handleSaveBalance} 
-            onDelete={handleDeleteBalance} 
+            onSave={(b) => {
+              const filtered = data.balances.filter(item => item.id !== b.id);
+              saveData({ ...data, balances: [...filtered, b] });
+              showToast("Balance actualizado");
+            }} 
+            onDelete={(id) => {
+              saveData({ ...data, balances: data.balances.filter(b => b.id !== id) });
+              showToast("Balance eliminado");
+            }} 
           />
         )}
         {activeTab === 'inversiones' && (
           <InvestmentsView 
             data={data.inversiones} 
-            onSave={handleSaveInvestment} 
-            onDelete={handleDeleteInvestment} 
+            onSave={(i) => {
+              const filtered = data.inversiones.filter(item => item.id !== i.id);
+              saveData({ ...data, inversiones: [...filtered, i] });
+              showToast("Inversión guardada");
+            }} 
+            onDelete={(id) => {
+              saveData({ ...data, inversiones: data.inversiones.filter(i => i.id !== id) });
+              showToast("Inversión eliminada");
+            }} 
           />
         )}
         {activeTab === 'config' && (
           <ConfigView 
             config={data.config}
-            onSave={handleSaveConfig}
+            onSave={(newConfig) => {
+              saveData({ ...data, config: newConfig });
+              showToast("Configuración guardada");
+            }}
           />
         )}
       </main>
 
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4 pointer-events-none">
-        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-gray-100 p-2 flex justify-between items-center gap-1 pointer-events-auto">
-            <button onClick={() => setActiveTab('movimientos')} className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 ${activeTab === 'movimientos' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}>
-              <LayoutDashboard size={24} />
-              <span className="text-[10px] font-medium mt-1">Movimientos</span>
+      {/* Navigation Bar */}
+      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-6 pointer-events-none">
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 p-2 flex justify-between items-center gap-1 pointer-events-auto ring-1 ring-black/5">
+            <button onClick={() => setActiveTab('movimientos')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all duration-300 ${activeTab === 'movimientos' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}>
+              <LayoutDashboard size={20} />
+              <span className="text-[10px] font-bold mt-1 uppercase tracking-tighter">Diario</span>
             </button>
-            <button onClick={() => setActiveTab('balances')} className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 ${activeTab === 'balances' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}>
-              <Wallet size={24} />
-              <span className="text-[10px] font-medium mt-1">Balances</span>
+            <button onClick={() => setActiveTab('balances')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all duration-300 ${activeTab === 'balances' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}>
+              <Wallet size={20} />
+              <span className="text-[10px] font-bold mt-1 uppercase tracking-tighter">Balance</span>
             </button>
-            <button onClick={() => setActiveTab('inversiones')} className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 ${activeTab === 'inversiones' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}>
-              <TrendingUp size={24} />
-              <span className="text-[10px] font-medium mt-1">Inversiones</span>
+            <button onClick={() => setActiveTab('inversiones')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all duration-300 ${activeTab === 'inversiones' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}>
+              <TrendingUp size={20} />
+              <span className="text-[10px] font-bold mt-1 uppercase tracking-tighter">Broker</span>
             </button>
         </div>
-      </div>
+      </nav>
 
       {notification && (
-        <div className="fixed bottom-28 right-4 md:right-8 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
-          <div className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border ${notification.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-            {notification.type === 'success' ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
-            <span className="font-medium">{notification.msg}</span>
+        <div className="fixed top-20 right-4 md:right-8 z-50 animate-in slide-in-from-right-10 duration-300">
+          <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-md ${notification.type === 'success' ? 'bg-green-50/90 border-green-200 text-green-800' : 'bg-red-50/90 border-red-200 text-red-800'}`}>
+            {notification.type === 'success' ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
+            <span className="font-bold text-sm">{notification.msg}</span>
           </div>
         </div>
       )}
