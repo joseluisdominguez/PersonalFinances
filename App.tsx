@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { LayoutDashboard, Wallet, TrendingUp, Download, Upload, PieChart, CheckCircle2, XCircle, Settings, Cloud, CloudOff, Share2, Link } from 'lucide-react';
-import { AppData, Transaction, Balance, Investment, AppConfig, CategoryItem } from './types';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { LayoutDashboard, Wallet, TrendingUp, Download, Upload, PieChart, CheckCircle2, XCircle, Settings, Cloud, CloudOff, Share2, RefreshCw, FileJson } from 'lucide-react';
+import { AppData, Transaction, Balance, Investment, AppConfig } from './types';
 import { TransactionsView } from './components/TransactionsView';
 import { BalanceView } from './components/BalanceView';
 import { InvestmentsView } from './components/InvestmentsView';
@@ -25,7 +25,7 @@ const DEFAULT_CONFIG: AppConfig = {
   banks: ['Ibercaja', 'ING', 'Unicaja', 'Otras Cuentas']
 };
 
-const getMockData = (): AppData => ({
+const getInitialData = (): AppData => ({
   config: DEFAULT_CONFIG,
   movimientos: [],
   balances: [],
@@ -34,22 +34,23 @@ const getMockData = (): AppData => ({
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'movimientos' | 'balances' | 'inversiones' | 'config'>('movimientos');
-  const [data, setData] = useState<AppData>(getMockData());
+  const [data, setData] = useState<AppData>(getInitialData());
   const [notification, setNotification] = useState<{msg: string, type: 'success'|'error'} | null>(null);
   
-  // File System API State (Mac/PC)
+  // Sync States
   const [fileHandle, setFileHandle] = useState<any>(null);
-  const [isSavingToFile, setIsSavingToFile] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'error' | 'synced'>('idle');
+  const autosaveTimer = useRef<number | null>(null);
 
+  // Load Initial Data
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        if (!parsed.config) parsed.config = DEFAULT_CONFIG;
         setData(parsed);
       } catch (e) {
-        setData(getMockData());
+        console.error("Error loading local storage", e);
       }
     }
   }, []);
@@ -59,100 +60,110 @@ export default function App() {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const saveData = async (newData: AppData) => {
-    setData(newData);
+  // Persistencia con Debounce (Autosave)
+  const persist = useCallback(async (newData: AppData) => {
+    // 1. Local Storage (Inmediato)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+    setSyncStatus('saving');
 
-    // Autosave si hay un archivo vinculado (Desktop/Mac)
+    // 2. File System API (Mac Desktop) - Solo si hay handle
     if (fileHandle) {
       try {
-        setIsSavingToFile(true);
+        // Verificar si tenemos permiso de escritura (a veces caduca)
+        const options = { mode: 'readwrite' };
+        if (await fileHandle.queryPermission(options) !== 'granted') {
+          if (await fileHandle.requestPermission(options) !== 'granted') {
+            throw new Error('Permiso denegado');
+          }
+        }
+        
         const writable = await fileHandle.createWritable();
         await writable.write(JSON.stringify(newData, null, 2));
         await writable.close();
+        setSyncStatus('synced');
       } catch (err) {
-        console.error("Error autosaving to file:", err);
-        setFileHandle(null); // Desvincular si falla el permiso
-        showToast("Error al guardar en el archivo vinculado", "error");
-      } finally {
-        setIsSavingToFile(false);
+        console.error("Autosave falló", err);
+        setSyncStatus('error');
       }
+    } else {
+      setTimeout(() => setSyncStatus('idle'), 1000);
     }
+  }, [fileHandle]);
+
+  const updateData = (newData: AppData) => {
+    setData(newData);
+    
+    // Autosave con debounce de 1.5s
+    if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
+    autosaveTimer.current = window.setTimeout(() => {
+      persist(newData);
+    }, 1500);
   };
 
-  // --- Remote Persistence Handlers ---
+  // --- Handlers ---
 
   const handleLinkFile = async () => {
     try {
-      // @ts-ignore - File System Access API
+      // @ts-ignore - Intentar abrir con permisos de lectura/escritura desde el inicio
       const [handle] = await window.showOpenFilePicker({
-        types: [{ description: 'JSON Backup', accept: { 'application/json': ['.json'] } }],
-        multiple: false
+        types: [{
+          description: 'Finanzas JSON',
+          accept: { 'application/json': ['.json'] }
+        }],
+        multiple: false,
+        mode: 'readwrite' // Pedir escritura desde el inicio
       });
       
       const file = await handle.getFile();
       const content = await file.text();
       const json = JSON.parse(content);
       
-      if (window.confirm("¿Vincular archivo y cargar datos? Se reemplazará lo actual.")) {
-        setFileHandle(handle);
-        saveData(json);
-        showToast("Archivo vinculado: Autosave activado");
+      setFileHandle(handle);
+      updateData(json);
+      showToast("Vínculo establecido: Autosave activo");
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error(err);
+        showToast("Error al vincular el archivo", "error");
       }
-    } catch (err) {
-      console.log("File link cancelled or failed");
     }
   };
 
-  const handleCloudPush = async () => {
+  const handleManualExport = () => {
     const dataStr = JSON.stringify(data, null, 2);
-    
-    // Si estamos en móvil (iOS), usamos Share API para "Guardar en Archivos" o Drive
+    const blob = new Blob([dataStr], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `finanzas_backup_${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    showToast("Archivo exportado");
+  };
+
+  const handleShareIOS = async () => {
     if (navigator.share) {
-      const file = new File([dataStr], `finanzas_backup.json`, { type: 'application/json' });
+      const dataStr = JSON.stringify(data, null, 2);
+      const file = new File([dataStr], `finanzas_sync.json`, { type: 'application/json' });
       try {
         await navigator.share({
           files: [file],
-          title: 'Backup de Finanzas',
-          text: 'Sincroniza tus datos con iCloud/Drive'
+          title: 'Sincronizar Finanzas',
         });
-        showToast("Sincronización enviada");
-      } catch (err) {
-        console.log("Share cancelled");
+        showToast("Compartido correctamente");
+      } catch (e) {
+        console.log("Compartir cancelado");
       }
     } else {
-      // Fallback: Exportación normal
-      const blob = new Blob([dataStr], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `finanzas_backup.json`;
-      link.click();
+      handleManualExport();
     }
-  };
-
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const json = JSON.parse(text);
-      if (window.confirm("¿Importar datos?")) {
-        saveData(json);
-        showToast("Datos importados");
-      }
-    } catch (err) {
-      showToast("Error al importar", "error");
-    }
-    e.target.value = '';
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col pb-32">
-      <header className="bg-white border-b sticky top-0 z-30 shadow-sm transition-all duration-300">
+      <header className="bg-white border-b sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('movimientos')}>
-            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-md shadow-blue-100">
+            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-md">
               <PieChart size={22} />
             </div>
             <h1 className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 hidden sm:block">
@@ -160,37 +171,33 @@ export default function App() {
             </h1>
           </div>
           
-          <div className="flex items-center gap-1 sm:gap-2">
-            {/* Indicador de Autosave */}
-            <button 
-              onClick={handleLinkFile}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all border ${
-                fileHandle 
-                ? 'bg-green-50 text-green-700 border-green-200' 
-                : 'bg-gray-50 text-gray-400 border-gray-200 hover:border-blue-300 hover:text-blue-500'
-              }`}
-              title={fileHandle ? "Autosave Activo en archivo local" : "Vincular a archivo local (Desktop)"}
-            >
-              {isSavingToFile ? <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" /> : fileHandle ? <Cloud size={14} /> : <CloudOff size={14} />}
-              <span className="hidden md:inline">{fileHandle ? 'Autosave ON' : 'Vincular Sync'}</span>
-            </button>
+          <div className="flex items-center gap-2">
+            {/* Estado de Sincronización */}
+            <div className="flex items-center gap-1.5 mr-2">
+               {syncStatus === 'saving' && <RefreshCw size={14} className="text-blue-500 animate-spin" />}
+               {syncStatus === 'synced' && <CheckCircle2 size={14} className="text-green-500" />}
+               {syncStatus === 'error' && <XCircle size={14} className="text-red-500" />}
+               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest hidden md:inline">
+                 {syncStatus === 'saving' ? 'Guardando...' : syncStatus === 'synced' ? 'Sincronizado' : syncStatus === 'error' ? 'Error Sync' : ''}
+               </span>
+            </div>
 
             <div className="h-6 w-px bg-gray-200 mx-1"></div>
 
-            <button onClick={handleCloudPush} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors" title="Sincronizar a Nube (iOS/Share)">
+            {/* Acciones de Archivo */}
+            <button 
+              onClick={handleLinkFile} 
+              className={`p-2 rounded-xl transition-all ${fileHandle ? 'bg-green-50 text-green-600' : 'text-gray-500 hover:bg-gray-100'}`}
+              title="Vincular archivo (Mac/Desktop)"
+            >
+              {fileHandle ? <Cloud size={20} /> : <CloudOff size={20} />}
+            </button>
+
+            <button onClick={handleShareIOS} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors" title="Compartir/Guardar (iOS)">
               <Share2 size={20} />
             </button>
 
-            <label className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors cursor-pointer" title="Importar JSON">
-              <Upload size={20} />
-              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-            </label>
-
-            <button 
-              onClick={() => setActiveTab('config')} 
-              className={`p-2 rounded-xl transition-colors ${activeTab === 'config' ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'}`}
-              title="Ajustes"
-            >
+            <button onClick={() => setActiveTab('config')} className={`p-2 rounded-xl ${activeTab === 'config' ? 'bg-blue-50 text-blue-600' : 'text-gray-500'}`}>
               <Settings size={20} />
             </button>
           </div>
@@ -204,12 +211,10 @@ export default function App() {
             categories={data.config.categories}
             onSave={(t) => {
               const exists = data.movimientos.some(m => m.id === t.id);
-              saveData({ ...data, movimientos: exists ? data.movimientos.map(m => m.id === t.id ? t : m) : [...data.movimientos, t] });
-              showToast("Movimiento guardado");
+              updateData({ ...data, movimientos: exists ? data.movimientos.map(m => m.id === t.id ? t : m) : [...data.movimientos, t] });
             }} 
             onDelete={(id) => {
-              saveData({ ...data, movimientos: data.movimientos.filter(m => m.id !== id) });
-              showToast("Movimiento eliminado");
+              updateData({ ...data, movimientos: data.movimientos.filter(m => m.id !== id) });
             }} 
           />
         )}
@@ -219,12 +224,10 @@ export default function App() {
             banks={data.config.banks}
             onSave={(b) => {
               const filtered = data.balances.filter(item => item.id !== b.id);
-              saveData({ ...data, balances: [...filtered, b] });
-              showToast("Balance actualizado");
+              updateData({ ...data, balances: [...filtered, b] });
             }} 
             onDelete={(id) => {
-              saveData({ ...data, balances: data.balances.filter(b => b.id !== id) });
-              showToast("Balance eliminado");
+              updateData({ ...data, balances: data.balances.filter(b => b.id !== id) });
             }} 
           />
         )}
@@ -233,46 +236,40 @@ export default function App() {
             data={data.inversiones} 
             onSave={(i) => {
               const filtered = data.inversiones.filter(item => item.id !== i.id);
-              saveData({ ...data, inversiones: [...filtered, i] });
-              showToast("Inversión guardada");
+              updateData({ ...data, inversiones: [...filtered, i] });
             }} 
             onDelete={(id) => {
-              saveData({ ...data, inversiones: data.inversiones.filter(i => i.id !== id) });
-              showToast("Inversión eliminada");
+              updateData({ ...data, inversiones: data.inversiones.filter(i => i.id !== id) });
             }} 
           />
         )}
         {activeTab === 'config' && (
           <ConfigView 
             config={data.config}
-            onSave={(newConfig) => {
-              saveData({ ...data, config: newConfig });
-              showToast("Configuración guardada");
-            }}
+            onSave={(newConfig) => updateData({ ...data, config: newConfig })}
           />
         )}
       </main>
 
-      {/* Navigation Bar */}
-      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-6 pointer-events-none">
-        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 p-2 flex justify-between items-center gap-1 pointer-events-auto ring-1 ring-black/5">
-            <button onClick={() => setActiveTab('movimientos')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all duration-300 ${activeTab === 'movimientos' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}>
+      <nav className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-6">
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/50 p-2 flex justify-between items-center gap-1 ring-1 ring-black/5">
+            <button onClick={() => setActiveTab('movimientos')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all ${activeTab === 'movimientos' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400'}`}>
               <LayoutDashboard size={20} />
-              <span className="text-[10px] font-bold mt-1 uppercase tracking-tighter">Diario</span>
+              <span className="text-[10px] font-bold mt-1 uppercase">Diario</span>
             </button>
-            <button onClick={() => setActiveTab('balances')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all duration-300 ${activeTab === 'balances' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}>
+            <button onClick={() => setActiveTab('balances')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all ${activeTab === 'balances' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400'}`}>
               <Wallet size={20} />
-              <span className="text-[10px] font-bold mt-1 uppercase tracking-tighter">Balance</span>
+              <span className="text-[10px] font-bold mt-1 uppercase">Patrimonio</span>
             </button>
-            <button onClick={() => setActiveTab('inversiones')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all duration-300 ${activeTab === 'inversiones' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-gray-400 hover:text-gray-600'}`}>
+            <button onClick={() => setActiveTab('inversiones')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-xl transition-all ${activeTab === 'inversiones' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400'}`}>
               <TrendingUp size={20} />
-              <span className="text-[10px] font-bold mt-1 uppercase tracking-tighter">Broker</span>
+              <span className="text-[10px] font-bold mt-1 uppercase">Broker</span>
             </button>
         </div>
       </nav>
 
       {notification && (
-        <div className="fixed top-20 right-4 md:right-8 z-50 animate-in slide-in-from-right-10 duration-300">
+        <div className="fixed top-20 right-4 z-50 animate-in slide-in-from-right-10">
           <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border backdrop-blur-md ${notification.type === 'success' ? 'bg-green-50/90 border-green-200 text-green-800' : 'bg-red-50/90 border-red-200 text-red-800'}`}>
             {notification.type === 'success' ? <CheckCircle2 size={18} /> : <XCircle size={18} />}
             <span className="font-bold text-sm">{notification.msg}</span>
