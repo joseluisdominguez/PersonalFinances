@@ -306,49 +306,112 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
     );
   };
 
-  const renderItem = (t: DisplayTransaction) => (
-    <React.Fragment key={`${t.id}-${t.esProrrateado}`}>
-      <tr className={`hidden md:table-row hover:bg-gray-50 transition-colors border-b last:border-b-0 ${editingId === t.id ? 'bg-blue-50' : ''}`}>
-        <td className="p-4 text-sm text-gray-600">{formatDate(t.fecha)}</td>
-        <td className="p-4 font-medium text-gray-900">
-           <div className="flex items-center gap-2">
-             {t.nombre}
-             {t.esProrrateado && <Zap size={12} className="text-blue-500 fill-blue-500" />}
-           </div>
-        </td>
-        <td className="p-4">
-          <span className="px-2.5 py-1 rounded-lg text-xs font-bold text-white shadow-sm" style={{ backgroundColor: getCategoryColor(t.categoria) }}>{t.categoria}</span>
-        </td>
-        <td className={`p-4 text-right font-bold ${t.tipo === 'ingreso' ? 'text-green-600' : 'text-red-600'}`}>
-          {t.tipo === 'ingreso' ? '+' : '-'}{formatCurrency(t.cantidadAMostrar)}
-        </td>
-        <td className="p-4 text-right">
-          <div className="flex justify-end gap-2">
-            <button onClick={() => handleEdit(t)} className="p-2 text-gray-400 hover:text-blue-500 rounded-lg"><Edit2 size={18} /></button>
-            <button onClick={() => setDeleteId(t.id)} className="p-2 text-gray-400 hover:text-red-500 rounded-lg"><Trash2 size={18} /></button>
-          </div>
-        </td>
-      </tr>
-      <div className={`md:hidden p-4 border-b space-y-3 ${editingId === t.id ? 'bg-blue-50' : 'bg-white'}`}>
-         <div className="flex justify-between items-start">
+  // Render para cada fila en móvil (Card) y escritorio (Table Row)
+  const renderItem = (t: DisplayTransaction) => {
+    return (
+      <React.Fragment key={`${t.id}-${t.esProrrateado}`}>
+        {/* Vista Escritorio */}
+        <tr className={`hidden md:table-row hover:bg-gray-50 transition-colors border-b last:border-b-0 ${editingId === t.id ? 'bg-blue-50' : ''}`}>
+          <td className="p-4 text-sm text-gray-600">
             <div className="flex flex-col">
-              <span className="text-xs text-gray-500">{formatDate(t.fecha)}</span>
-              <span className="font-bold text-gray-900">{t.nombre}</span>
+              {formatDate(t.fecha)}
+              {t.fechaInicioDevengo && (
+                <span className="text-[10px] text-blue-500 font-bold uppercase tracking-tighter flex items-center gap-0.5 mt-1" title="Periodo total">
+                  <CalendarRange size={10} /> {getDaysBetween(t.fechaInicioDevengo, t.fechaFinDevengo!)} d.
+                </span>
+              )}
             </div>
-            <div className={`text-right font-bold ${t.tipo === 'ingreso' ? 'text-green-600' : 'text-red-600'}`}>
-              {t.tipo === 'ingreso' ? '+' : '-'}{formatCurrency(t.cantidadAMostrar)}
+          </td>
+          <td className="p-4 font-medium text-gray-900">
+            <div className="flex items-center gap-2">
+              <div className="flex flex-col">
+                <span className="flex items-center gap-2">
+                  {t.nombre}
+                  {t.esProrrateado && <Zap size={12} className="text-blue-500 fill-blue-500" />}
+                </span>
+                {t.fechaInicioDevengo && (
+                  <span className="text-[10px] text-gray-400 font-normal">
+                    {formatDate(t.fechaInicioDevengo)} al {formatDate(t.fechaFinDevengo!)}
+                  </span>
+                )}
+              </div>
+              {t.notas && (
+                <div className="group relative">
+                  <Info size={16} className="text-gray-400 cursor-help" />
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-gray-800 text-white text-xs rounded z-10 shadow-lg pointer-events-none text-center">
+                    {t.notas}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
+                  </div>
+                </div>
+              )}
             </div>
-         </div>
-         <div className="flex justify-between items-center">
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white" style={{ backgroundColor: getCategoryColor(t.categoria) }}>{t.categoria}</span>
-            <div className="flex items-center gap-4">
-              <button onClick={() => handleEdit(t)} className="text-gray-400 hover:text-blue-500"><Edit2 size={16} /></button>
-              <button onClick={() => setDeleteId(t.id)} className="text-gray-400 hover:text-red-500"><Trash2 size={16} /></button>
+          </td>
+          <td className="p-4">
+            <span className="px-2 py-1 rounded-full text-xs font-bold shadow-sm border border-black/5" style={{ backgroundColor: getCategoryColor(t.categoria), color: '#FFFFFF', textShadow: '0 1px 1px rgba(0,0,0,0.2)' }}>
+              {t.categoria}
+            </span>
+          </td>
+          <td className={`p-4 text-right font-bold ${t.tipo === 'ingreso' ? 'text-green-600' : 'text-red-600'}`}>
+            <div className="flex flex-col items-end">
+              <span>{t.tipo === 'ingreso' ? '+' : '-'}{formatCurrency(t.cantidadAMostrar)}</span>
+              {t.esProrrateado && (
+                <span className="text-[9px] text-blue-500 font-bold uppercase tracking-tighter">
+                  {t.diasEnMes}/{t.diasTotales} días
+                </span>
+              )}
             </div>
-         </div>
-      </div>
-    </React.Fragment>
-  );
+          </td>
+          <td className="p-4 text-right">
+            <div className="flex justify-end gap-2">
+              <button onClick={() => handleEdit(t)} className="text-gray-400 hover:text-blue-500 transition-colors p-1" title="Editar"><Edit2 size={18} /></button>
+              <button onClick={() => setDeleteId(t.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Eliminar"><Trash2 size={18} /></button>
+            </div>
+          </td>
+        </tr>
+
+        {/* Vista Móvil */}
+        <div className={`md:hidden p-4 border-b space-y-3 ${editingId === t.id ? 'bg-blue-50' : 'bg-white'}`}>
+           <div className="flex justify-between items-start">
+              <div className="flex flex-col">
+                <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">{formatDate(t.fecha)}</span>
+                <span className="font-bold text-gray-900 flex items-center gap-1.5">
+                  {t.nombre}
+                  {t.esProrrateado && <Zap size={12} className="text-blue-500 fill-blue-500" />}
+                </span>
+              </div>
+              <div className={`text-right font-bold ${t.tipo === 'ingreso' ? 'text-green-600' : 'text-red-600'}`}>
+                {t.tipo === 'ingreso' ? '+' : '-'}{formatCurrency(t.cantidadAMostrar)}
+                {t.esProrrateado && (
+                  <div className="text-[10px] text-blue-500 font-bold uppercase">
+                    {t.diasEnMes}/{t.diasTotales} días
+                  </div>
+                )}
+              </div>
+           </div>
+
+           <div className="flex justify-between items-center">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold text-white shadow-sm" style={{ backgroundColor: getCategoryColor(t.categoria) }}>
+                {t.categoria}
+              </span>
+              <div className="flex items-center gap-3">
+                <button onClick={() => handleEdit(t)} className="text-gray-500 hover:text-blue-500 flex items-center gap-1 text-xs font-semibold">
+                  <Edit2 size={14} /> Editar
+                </button>
+                <button onClick={() => setDeleteId(t.id)} className="text-gray-500 hover:text-red-500 flex items-center gap-1 text-xs font-semibold">
+                  <Trash2 size={14} /> Borrar
+                </button>
+              </div>
+           </div>
+           
+           {t.fechaInicioDevengo && (
+             <div className="bg-blue-50 p-2 rounded text-[10px] text-blue-700 font-medium">
+               Devengo: {formatDate(t.fechaInicioDevengo)} al {formatDate(t.fechaFinDevengo!)}
+             </div>
+           )}
+        </div>
+      </React.Fragment>
+    );
+  };
 
   return (
     <div className="space-y-8 animate-fadeIn">
