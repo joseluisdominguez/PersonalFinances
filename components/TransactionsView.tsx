@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Plus, Trash2, Filter, ChevronLeft, ChevronRight, List, Layers, ChevronDown, ChevronUp, ArrowUp, ArrowDown, ArrowUpDown, Info, Edit2, X, Save, BarChart3, CalendarClock, Zap, CalendarRange, Repeat, CheckCircle2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Transaction, TransactionType, CategoryItem, RecurringTransaction } from '../types';
@@ -30,6 +30,8 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
   const [viewDate, setViewDate] = useState(new Date());
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showTooltip, setShowTooltip] = useState(false);
+  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const [filterType, setFilterType] = useState<'all' | TransactionType>('all');
   const [viewMode, setViewMode] = useState<'list' | 'grouped' | 'chart'>('list');
@@ -102,6 +104,24 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
     }));
 
     onSave(newTransactions);
+  };
+
+  const handleApplySingleRecurring = (r: RecurringTransaction, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const year = viewDate.getFullYear();
+    const month = String(viewDate.getMonth() + 1).padStart(2, '0');
+    
+    const newTransaction: Transaction = {
+      id: generateId(),
+      nombre: r.nombre,
+      tipo: r.tipo,
+      categoria: r.categoria,
+      cantidad: r.cantidad,
+      fecha: `${year}-${month}-${String(r.diaMes).padStart(2, '0')}`,
+      notas: 'Movimiento recurrente importado'
+    };
+
+    onSave(newTransaction);
   };
 
   const pendingRecurring = useMemo(() => {
@@ -272,6 +292,32 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
     setExpandedCategories(prev => prev.includes(category) ? prev.filter(c => c !== category) : [...prev, category]);
   };
 
+  const handleTooltipEnter = () => {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+      tooltipTimeoutRef.current = null;
+    }
+    setShowTooltip(true);
+  };
+
+  const handleTooltipLeave = () => {
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current);
+    }
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setShowTooltip(false);
+      tooltipTimeoutRef.current = null;
+    }, 100);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const getSortedItems = (items: DisplayTransaction[], config: SortConfig) => {
     const activeConfig = config.direction ? config : { key: 'fecha' as any, direction: 'desc' as any };
     return [...items].sort((a, b) => {
@@ -281,6 +327,21 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
       if (aValue > bValue) return activeConfig.direction === 'asc' ? 1 : -1;
       return b.id.localeCompare(a.id);
     });
+  };
+
+  const isRecurringTransaction = (t: DisplayTransaction): boolean => {
+    // Verificar si tiene la nota de movimiento recurrente importado
+    if (t.notas?.toLowerCase().includes('movimiento recurrente importado')) {
+      return true;
+    }
+    // También verificar si coincide con alguna plantilla recurrente activa
+    return recurrentes.some(r => 
+      r.activo && 
+      t.nombre.toLowerCase().includes(r.nombre.toLowerCase()) &&
+      Math.abs(r.cantidad - t.cantidad) < 1.0 &&
+      r.categoria === t.categoria &&
+      r.tipo === t.tipo
+    );
   };
 
   const TableHeader = ({ category }: { category?: string }) => {
@@ -327,7 +388,8 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
               <div className="flex flex-col">
                 <span className="flex items-center gap-2">
                   {t.nombre}
-                  {t.esProrrateado && <Zap size={12} className="text-blue-500 fill-blue-500" />}
+                  {t.esProrrateado && <Zap size={12} className="text-blue-500 fill-blue-500" title="Prorrateado" />}
+                  {isRecurringTransaction(t) && <Repeat size={12} className="text-purple-500" title="Movimiento recurrente" />}
                 </span>
                 {t.fechaInicioDevengo && (
                   <span className="text-[10px] text-gray-400 font-normal">
@@ -376,7 +438,8 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
                 <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">{formatDate(t.fecha)}</span>
                 <span className="font-bold text-gray-900 flex items-center gap-1.5">
                   {t.nombre}
-                  {t.esProrrateado && <Zap size={12} className="text-blue-500 fill-blue-500" />}
+                  {t.esProrrateado && <Zap size={12} className="text-blue-500 fill-blue-500" title="Prorrateado" />}
+                  {isRecurringTransaction(t) && <Repeat size={12} className="text-purple-500" title="Movimiento recurrente" />}
                 </span>
               </div>
               <div className={`text-right font-bold ${t.tipo === 'ingreso' ? 'text-green-600' : 'text-red-600'}`}>
@@ -433,9 +496,67 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
         <Card className="bg-blue-600 text-white border-none shadow-xl flex flex-col md:flex-row items-center justify-between gap-6 p-6">
            <div className="flex items-center gap-4">
               <div className="p-3 bg-white/20 rounded-2xl"><Repeat size={28} className="text-white" /></div>
-              <div>
+              <div className="relative">
                  <h4 className="font-bold text-xl">Movimientos Habituales</h4>
-                 <p className="text-blue-100 text-sm">Hay {pendingRecurring.length} plantillas sugeridas para este mes.</p>
+                 <p 
+                   className="text-blue-100 text-sm cursor-help inline-block underline decoration-dotted decoration-blue-200/50 hover:decoration-blue-200"
+                   onMouseEnter={handleTooltipEnter}
+                   onMouseLeave={handleTooltipLeave}
+                   onClick={() => setShowTooltip(!showTooltip)}
+                   onTouchStart={() => setShowTooltip(!showTooltip)}
+                 >
+                   Hay {pendingRecurring.length} plantillas sugeridas para este mes.
+                 </p>
+                 {showTooltip && (
+                   <div 
+                     className="absolute z-50 top-full left-0 mt-1 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-2xl border border-gray-200 p-4 animate-fadeIn"
+                     onMouseEnter={handleTooltipEnter}
+                     onMouseLeave={handleTooltipLeave}
+                   >
+                     <div className="absolute -top-1.5 left-8 transform rotate-45 w-3 h-3 bg-white border-l border-t border-gray-200 pointer-events-none"></div>
+                     <h5 className="font-bold text-gray-900 text-sm mb-3 pb-2 border-b border-gray-100">Plantillas Pendientes</h5>
+                     <div className="max-h-64 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                       {pendingRecurring.map((r) => {
+                         const categoryColor = getCategoryColor(r.categoria);
+                         const year = viewDate.getFullYear();
+                         const month = String(viewDate.getMonth() + 1).padStart(2, '0');
+                         const fecha = `${year}-${month}-${String(r.diaMes).padStart(2, '0')}`;
+                         return (
+                           <div key={r.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-lg transition-colors gap-2">
+                             <div className="flex items-center gap-2 flex-1 min-w-0">
+                               <div 
+                                 className="w-2 h-2 rounded-full flex-shrink-0" 
+                                 style={{ backgroundColor: categoryColor }}
+                               ></div>
+                               <div className="flex-1 min-w-0">
+                                 <p className="font-medium text-gray-900 text-sm truncate">{r.nombre}</p>
+                                 <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
+                                   <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold text-white" style={{ backgroundColor: categoryColor }}>
+                                     {r.categoria}
+                                   </span>
+                                   <span>•</span>
+                                   <span>{formatDate(fecha)}</span>
+                                 </div>
+                               </div>
+                             </div>
+                             <div className="flex items-center gap-2">
+                               <p className={`font-bold text-sm whitespace-nowrap ${r.tipo === 'ingreso' ? 'text-green-600' : 'text-red-600'}`}>
+                                 {r.tipo === 'ingreso' ? '+' : '-'}{formatCurrency(r.cantidad)}
+                               </p>
+                               <button
+                                 onClick={(e) => handleApplySingleRecurring(r, e)}
+                                 className="p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex-shrink-0"
+                                 title="Importar esta plantilla"
+                               >
+                                 <Plus size={14} />
+                               </button>
+                             </div>
+                           </div>
+                         );
+                       })}
+                     </div>
+                   </div>
+                 )}
               </div>
            </div>
            <button onClick={() => handleApplyRecurring(pendingRecurring)} className="bg-white text-blue-600 hover:bg-blue-50 px-6 py-3 rounded-xl font-bold text-sm shadow-lg w-full md:w-auto">
