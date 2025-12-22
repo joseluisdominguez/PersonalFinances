@@ -628,22 +628,27 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
                             .map(pay => (
                             <div key={pay.id} className="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50 group">
                                 <div className="flex items-center gap-3">
+                                    {/* Fix: use pay.tipo instead of pay.type */}
                                     <div className={`${
-                                      pay.type === 'retiro' ? 'bg-orange-100 text-orange-700' : 
-                                      pay.type === 'aportacion' ? 'bg-blue-100 text-blue-700' :
+                                      pay.tipo === 'retiro' ? 'bg-orange-100 text-orange-700' : 
+                                      pay.tipo === 'aportacion' ? 'bg-blue-100 text-blue-700' :
                                       'bg-green-100 text-green-700'
                                     } p-2 rounded-full`}>
-                                        {pay.type === 'retiro' ? <MinusCircle size={14} /> : 
-                                         pay.type === 'aportacion' ? <ArrowUpCircle size={14} /> :
+                                        {/* Fix: use pay.tipo instead of pay.type */}
+                                        {pay.tipo === 'retiro' ? <MinusCircle size={14} /> : 
+                                         pay.tipo === 'aportacion' ? <ArrowUpCircle size={14} /> :
                                          <Calendar size={14} />}
                                     </div>
                                     <div>
                                         <div className="flex items-center gap-2">
-                                          <p className={`font-bold ${pay.type === 'retiro' ? 'text-orange-600' : pay.type === 'aportacion' ? 'text-blue-600' : 'text-gray-900'}`}>
-                                            {pay.type === 'retiro' ? '-' : '+'}{formatCurrency(pay.cantidad)}
+                                          {/* Fix: use pay.tipo instead of pay.type */}
+                                          <p className={`font-bold ${pay.tipo === 'retiro' ? 'text-orange-600' : pay.tipo === 'aportacion' ? 'text-blue-600' : 'text-gray-900'}`}>
+                                            {/* Fix: use pay.tipo instead of pay.type */}
+                                            {pay.tipo === 'retiro' ? '-' : '+'}{formatCurrency(pay.cantidad)}
                                           </p>
                                           <span className="text-[10px] uppercase font-bold text-gray-400 border px-1 rounded">
-                                            {pay.type === 'interes' ? 'Liquidación' : pay.type}
+                                            {/* Fix: use pay.tipo instead of pay.type */}
+                                            {pay.tipo === 'interes' ? 'Liquidación' : pay.tipo}
                                           </span>
                                         </div>
                                         <p className="text-xs text-gray-500">{formatDate(pay.fecha)} {pay.nota ? `• ${pay.nota}` : ''}</p>

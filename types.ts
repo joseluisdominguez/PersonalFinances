@@ -1,27 +1,39 @@
 
 export type TransactionType = 'ingreso' | 'gasto';
 
-// Changed from union type to string to support user custom categories
 export type TransactionCategory = string;
 
 export interface Transaction {
   id: string;
-  fecha: string; // ISO string (Fecha del pago/cobro real)
+  fecha: string; 
   nombre: string;
   tipo: TransactionType;
   categoria: string;
   cantidad: number;
   notas?: string;
-  // Campos para el devengo (amortización visual)
   fechaInicioDevengo?: string; 
   fechaFinDevengo?: string;
 }
 
+export type FrequencyType = 'mensual' | 'trimestral' | 'semestral' | 'anual';
+
+export interface RecurringTransaction {
+  id: string;
+  nombre: string;
+  tipo: TransactionType;
+  categoria: string;
+  cantidad: number;
+  frecuencia: FrequencyType;
+  diaMes: number;
+  mesInicio?: number; // 0-11 (Enero-Diciembre) para definir el inicio del ciclo
+  notas?: string;
+  activo: boolean;
+}
+
 export interface Balance {
-  id: string; // YYYY-MM
+  id: string; 
   mes: number;
   anio: number;
-  // Changed to dynamic record to support user custom banks
   cuentas: Record<string, number>;
   total: number;
 }
@@ -32,7 +44,7 @@ export type PaymentType = 'interes' | 'beneficio' | 'retiro' | 'aportacion';
 
 export interface InterestPayment {
   id: string;
-  fecha: string; // ISO string
+  fecha: string;
   cantidad: number;
   tipo: PaymentType;
   nota?: string;
@@ -43,14 +55,14 @@ export interface Investment {
   tipo: InvestmentType;
   nombre: string;
   entidad?: string;
-  capitalInvertido: number; // For cashflow types: Initial Principal. For others: Cost Basis.
-  valorActual: number; // Current Balance / Market Value
-  rentabilidad?: number; // Calculated or manual depending on type
+  capitalInvertido: number;
+  valorActual: number;
+  rentabilidad?: number;
   fecha: string;
-  detalles: any; // Flexible for specific type details
+  detalles: any;
   estado?: 'activo' | 'completado' | 'vencido';
-  historialPagos?: InterestPayment[]; // Used for interests, benefits and withdrawals
-  notas?: string; // Generic notes for all investment types
+  historialPagos?: InterestPayment[];
+  notas?: string;
 }
 
 export interface CategoryItem {
@@ -65,6 +77,7 @@ export interface AppConfig {
 
 export interface AppData {
   movimientos: Transaction[];
+  recurrentes: RecurringTransaction[];
   balances: Balance[];
   inversiones: Investment[];
   config: AppConfig;

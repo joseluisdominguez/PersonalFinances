@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Wallet, TrendingUp, Download, Upload, PieChart, CheckCircle2, XCircle, Settings } from 'lucide-react';
-import { AppData, Transaction, Balance, Investment, AppConfig, CategoryItem } from './types';
+import { LayoutDashboard, Wallet, TrendingUp, Download, Upload, PieChart, CheckCircle2, XCircle, Settings, Repeat } from 'lucide-react';
+import { AppData, Transaction, Balance, Investment, AppConfig, RecurringTransaction } from './types';
 import { TransactionsView } from './components/TransactionsView';
 import { BalanceView } from './components/BalanceView';
 import { InvestmentsView } from './components/InvestmentsView';
 import { ConfigView } from './components/ConfigView';
+import { RecurringView } from './components/RecurringView';
 
 const STORAGE_KEY = 'finanzas_app_data';
 
@@ -32,28 +33,18 @@ const getMockData = (): AppData => {
   const day = (d: number) => String(d).padStart(2, '0');
   const ym = `${year}-${month}`;
 
-  const prevDate = new Date();
-  prevDate.setMonth(prevDate.getMonth() - 1);
-  const prevY = prevDate.getFullYear();
-  const prevM = String(prevDate.getMonth() + 1).padStart(2, '0');
-  
-  const prev2Date = new Date();
-  prev2Date.setMonth(prev2Date.getMonth() - 2);
-  const prev2Y = prev2Date.getFullYear();
-  const prev2M = String(prev2Date.getMonth() + 1).padStart(2, '0');
-
   return {
     config: DEFAULT_CONFIG,
     movimientos: [
       { id: 'm1', fecha: `${ym}-${day(1)}`, nombre: 'Nómina Mensual', tipo: 'ingreso', categoria: 'Salario', cantidad: 2450.00 },
       { id: 'm2', fecha: `${ym}-${day(2)}`, nombre: 'Alquiler Piso', tipo: 'gasto', categoria: 'Vivienda', cantidad: 850.00 },
-      { id: 'm3', fecha: `${ym}-${day(4)}`, nombre: 'Compra Semanal', tipo: 'gasto', categoria: 'Supermercado', cantidad: 124.35 },
-      { id: 'm4', fecha: `${ym}-${day(5)}`, nombre: 'Spotify', tipo: 'gasto', categoria: 'Ocio', cantidad: 17.99 },
     ],
-    balances: [
-      { id: `${prev2Y}-${prev2M}`, mes: Number(prev2M), anio: prev2Y, cuentas: { 'Ibercaja': 11800 }, total: 11800 },
-      { id: `${prevY}-${prevM}`, mes: Number(prevM), anio: prevY, cuentas: { 'Ibercaja': 12500 }, total: 12500 }
+    recurrentes: [
+      { id: 'r1', nombre: 'Cuota Hipoteca', tipo: 'gasto', categoria: 'Vivienda', cantidad: 650.00, frecuencia: 'mensual', diaMes: 1, activo: true },
+      { id: 'r2', nombre: 'Netflix', tipo: 'gasto', categoria: 'Ocio', cantidad: 17.99, frecuencia: 'mensual', diaMes: 5, activo: true },
+      { id: 'r3', nombre: 'IPTV Premium', tipo: 'gasto', categoria: 'Ocio', cantidad: 45.00, frecuencia: 'trimestral', diaMes: 10, activo: true }
     ],
+    balances: [],
     inversiones: []
   };
 };
@@ -61,7 +52,7 @@ const getMockData = (): AppData => {
 const INITIAL_DATA = getMockData();
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'movimientos' | 'balances' | 'inversiones' | 'config'>('movimientos');
+  const [activeTab, setActiveTab] = useState<'movimientos' | 'balances' | 'inversiones' | 'recurrentes' | 'config'>('movimientos');
   const [data, setData] = useState<AppData>(INITIAL_DATA);
   const [notification, setNotification] = useState<{msg: string, type: 'success'|'error'} | null>(null);
 
@@ -71,6 +62,7 @@ export default function App() {
       try {
         const parsed = JSON.parse(stored);
         if (!parsed.config) parsed.config = DEFAULT_CONFIG;
+        if (!parsed.recurrentes) parsed.recurrentes = [];
         setData(parsed);
       } catch (e) {
         setData(INITIAL_DATA);
@@ -88,16 +80,38 @@ export default function App() {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const handleSaveTransaction = (t: Transaction) => {
-    const exists = data.movimientos.some(m => m.id === t.id);
-    const newMovimientos = exists ? data.movimientos.map(m => m.id === t.id ? t : m) : [...data.movimientos, t];
+  const handleSaveTransaction = (t: Transaction | Transaction[]) => {
+    const transactions = Array.isArray(t) ? t : [t];
+    let newMovimientos = [...data.movimientos];
+    
+    transactions.forEach(newT => {
+      const exists = newMovimientos.some(m => m.id === newT.id);
+      if (exists) {
+        newMovimientos = newMovimientos.map(m => m.id === newT.id ? newT : m);
+      } else {
+        newMovimientos.push(newT);
+      }
+    });
+
     saveData({ ...data, movimientos: newMovimientos });
-    showToast("Movimiento guardado");
+    showToast(transactions.length > 1 ? `${transactions.length} movimientos guardados` : "Movimiento guardado");
   };
 
   const handleDeleteTransaction = (id: string) => {
     saveData({ ...data, movimientos: data.movimientos.filter(m => m.id !== id) });
     showToast("Movimiento eliminado");
+  };
+
+  const handleSaveRecurring = (r: RecurringTransaction) => {
+    const exists = data.recurrentes.some(item => item.id === r.id);
+    const newRecurrentes = exists ? data.recurrentes.map(item => item.id === r.id ? r : item) : [...data.recurrentes, r];
+    saveData({ ...data, recurrentes: newRecurrentes });
+    showToast("Plantilla recurrente guardada");
+  };
+
+  const handleDeleteRecurring = (id: string) => {
+    saveData({ ...data, recurrentes: data.recurrentes.filter(r => r.id !== id) });
+    showToast("Plantilla eliminada");
   };
 
   const handleSaveBalance = (b: Balance) => {
@@ -139,31 +153,23 @@ export default function App() {
     document.body.removeChild(link);
   };
 
-  // Importación mejorada para iOS y Safari móvil
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     try {
-      // Usar API de texto moderna más fiable en iOS
       const text = await file.text();
       const json = JSON.parse(text);
-
-      // Verificación básica del formato
-      if (!json.movimientos || !Array.isArray(json.movimientos)) {
-        throw new Error("El archivo no parece ser un backup válido.");
-      }
-
-      if (window.confirm("¿Importar backup? Se reemplazarán todos los datos actuales.")) {
+      if (!json.movimientos) throw new Error("Backup no válido");
+      if (window.confirm("¿Importar backup? Se reemplazarán todos los datos.")) {
         if (!json.config) json.config = DEFAULT_CONFIG;
+        if (!json.recurrentes) json.recurrentes = [];
         saveData(json);
-        showToast("Datos importados con éxito");
+        showToast("Datos importados");
       }
     } catch (err) {
-      console.error("Error importando:", err);
-      showToast("Error al leer el archivo. Asegúrate de que sea un JSON válido.", 'error');
+      showToast("Error al importar", 'error');
     } finally {
-      e.target.value = ''; // Resetear el input para permitir re-seleccionar el mismo archivo
+      e.target.value = '';
     }
   };
 
@@ -181,25 +187,16 @@ export default function App() {
           </div>
           
           <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setActiveTab('config')} 
-              className={`p-2 rounded-lg transition-colors ${activeTab === 'config' ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:text-blue-600 hover:bg-blue-50'}`}
-              title="Configuración"
-            >
+            <button onClick={() => setActiveTab('config')} className={`p-2 rounded-lg transition-colors ${activeTab === 'config' ? 'bg-blue-50 text-blue-600' : 'text-gray-500 hover:text-blue-600'}`} title="Configuración">
               <Settings size={20} />
             </button>
             <div className="h-6 w-px bg-gray-200 mx-1"></div>
-            <button onClick={handleExport} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Exportar Backup">
+            <button onClick={handleExport} className="p-2 text-gray-500 hover:text-blue-600 rounded-lg transition-colors" title="Exportar Backup">
               <Download size={20} />
             </button>
-            <label className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer" title="Importar Backup">
+            <label className="p-2 text-gray-500 hover:text-blue-600 rounded-lg transition-colors cursor-pointer" title="Importar Backup">
               <Upload size={20} />
-              <input 
-                type="file" 
-                accept=".json,application/json" 
-                onChange={handleImport} 
-                className="hidden" 
-              />
+              <input type="file" accept=".json" onChange={handleImport} className="hidden" />
             </label>
           </div>
         </div>
@@ -209,9 +206,18 @@ export default function App() {
         {activeTab === 'movimientos' && (
           <TransactionsView 
             data={data.movimientos} 
+            recurrentes={data.recurrentes}
             categories={data.config.categories}
             onSave={handleSaveTransaction} 
             onDelete={handleDeleteTransaction} 
+          />
+        )}
+        {activeTab === 'recurrentes' && (
+          <RecurringView 
+            data={data.recurrentes}
+            categories={data.config.categories}
+            onSave={handleSaveRecurring}
+            onDelete={handleDeleteRecurring}
           />
         )}
         {activeTab === 'balances' && (
@@ -237,11 +243,15 @@ export default function App() {
         )}
       </main>
 
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-md px-4 pointer-events-none">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-lg px-4 pointer-events-none">
         <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-gray-100 p-2 flex justify-between items-center gap-1 pointer-events-auto">
             <button onClick={() => setActiveTab('movimientos')} className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 ${activeTab === 'movimientos' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}>
               <LayoutDashboard size={24} />
               <span className="text-[10px] font-medium mt-1">Movimientos</span>
+            </button>
+            <button onClick={() => setActiveTab('recurrentes')} className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 ${activeTab === 'recurrentes' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}>
+              <Repeat size={24} />
+              <span className="text-[10px] font-medium mt-1">Recurrentes</span>
             </button>
             <button onClick={() => setActiveTab('balances')} className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 ${activeTab === 'balances' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}>
               <Wallet size={24} />
