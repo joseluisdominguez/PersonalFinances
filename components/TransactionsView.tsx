@@ -202,6 +202,9 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
       if (isAmortizedMode && t.fechaInicioDevengo && t.fechaFinDevengo) {
         const start = new Date(t.fechaInicioDevengo);
         const end = new Date(t.fechaFinDevengo);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(0, 0, 0, 0);
+
         const intersectionStart = new Date(Math.max(start.getTime(), monthStart.getTime()));
         const intersectionEnd = new Date(Math.min(end.getTime(), monthEnd.getTime()));
 
@@ -293,7 +296,7 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
     return (
       <thead className="bg-gray-50 border-b hidden md:table-header-group">
         <tr>
-          <Th label="Fecha" sortKey="fecha" />
+          <Th label="Fecha Pago" sortKey="fecha" />
           <Th label="Descripción" sortKey="nombre" />
           <Th label="Categoría" sortKey="categoria" />
           <Th label="Importe" sortKey="cantidad" align="right" />
@@ -388,8 +391,8 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
         <div className="lg:col-span-4 order-2 lg:order-1">
           <Card className={`sticky top-24 shadow-xl border-2 ${editingId ? 'border-blue-500' : 'border-gray-50'}`}>
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold">{editingId ? 'Editar Movimiento' : 'Nuevo Registro'}</h3>
-              {editingId && <button onClick={cancelEdit} className="p-2 text-gray-400 hover:text-gray-900"><X size={20} /></button>}
+              <h3 className="text-lg font-bold text-gray-800">{editingId ? 'Editar Movimiento' : 'Nuevo Movimiento'}</h3>
+              {editingId && <button onClick={cancelEdit} className="text-gray-400 hover:text-gray-600 p-1"><X size={20} /></button>}
             </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -401,34 +404,28 @@ export const TransactionsView: React.FC<Props> = ({ data, recurrentes, categorie
                 <Select label="Categoría" value={formData.categoria} onChange={e => setFormData({...formData, categoria: e.target.value})}>{sortedCategories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}</Select>
                 <Input label="Importe (€)" type="number" step="0.01" value={formData.cantidad === 0 ? '' : formData.cantidad} onChange={e => setFormData({...formData, cantidad: Number(e.target.value)})} required />
               </div>
-              
-              <div className="p-4 bg-gray-50 rounded-xl space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-700 uppercase">Activar Devengo</span>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowDevengoFields(!showDevengoFields)} 
-                    className={`w-10 h-5 rounded-full relative transition-colors ${showDevengoFields ? 'bg-blue-600' : 'bg-gray-300'}`}
-                  >
-                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full shadow-md transition-all ${showDevengoFields ? 'left-6' : 'left-1'}`}></div>
-                  </button>
-                </div>
+              <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100 space-y-3">
+                <button type="button" onClick={() => setShowDevengoFields(!showDevengoFields)} className="flex items-center justify-between w-full group">
+                  <div className="flex items-center gap-2">
+                    <CalendarClock size={16} className="text-blue-600" />
+                    <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Activar Devengo</span>
+                  </div>
+                  <div className={`w-10 h-5 rounded-full relative transition-colors ${showDevengoFields ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all ${showDevengoFields ? 'left-5.5' : 'left-0.5'}`}></div>
+                  </div>
+                </button>
                 {showDevengoFields && (
-                  <div className="grid grid-cols-2 gap-3 pt-2 animate-fadeIn">
-                    <Input label="F. Inicio" type="date" value={formData.fechaInicioDevengo} onChange={e => setFormData({...formData, fechaInicioDevengo: e.target.value})} required />
-                    <Input label="F. Fin" type="date" value={formData.fechaFinDevengo} onChange={e => setFormData({...formData, fechaFinDevengo: e.target.value})} required />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 pt-2 border-t border-blue-100 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <Input label="Inicio Servicio" type="date" value={formData.fechaInicioDevengo} onChange={e => setFormData({...formData, fechaInicioDevengo: e.target.value})} required={showDevengoFields} />
+                    <Input label="Fin Servicio" type="date" value={formData.fechaFinDevengo} onChange={e => setFormData({...formData, fechaFinDevengo: e.target.value})} required={showDevengoFields} />
                   </div>
                 )}
               </div>
-
-              <TextArea 
-                label="Notas" 
-                placeholder="Añade detalles adicionales..." 
-                value={formData.notas} 
-                onChange={e => setFormData({...formData, notas: e.target.value})} 
-              />
-
-              <Button type="submit" className="w-full">{editingId ? 'Actualizar' : 'Guardar'}</Button>
+              <TextArea label="Notas" placeholder="Detalles..." value={formData.notas || ''} onChange={e => setFormData({...formData, notas: e.target.value})} />
+              <div className="flex gap-2 pt-2">
+                {editingId && <Button variant="secondary" onClick={cancelEdit} className="flex-1">Cancelar</Button>}
+                <Button type="submit" className="flex-1 shadow-blue-100">{editingId ? <Save size={18} /> : <Plus size={18} />} {editingId ? 'Actualizar' : 'Guardar'}</Button>
+              </div>
             </form>
           </Card>
         </div>
