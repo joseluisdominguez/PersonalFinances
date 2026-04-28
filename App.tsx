@@ -221,11 +221,12 @@ export default function App() {
           />
         )}
         {activeTab === 'balances' && (
-          <BalanceView 
-            data={data.balances} 
+          <BalanceView
+            data={data.balances}
             banks={data.config.banks}
-            onSave={handleSaveBalance} 
-            onDelete={handleDeleteBalance} 
+            inversiones={data.inversiones}
+            onSave={handleSaveBalance}
+            onDelete={handleDeleteBalance}
           />
         )}
         {activeTab === 'inversiones' && (

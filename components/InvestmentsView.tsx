@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { Plus, Edit2, Trash2, PiggyBank, Coins, History, X, Calendar, TrendingUp, Info, MinusCircle, Wallet, ArrowUpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-import { Investment, InvestmentType, InterestPayment, PaymentType } from '../types';
+import { Investment, InvestmentType, InterestPayment, PaymentType, ValuationSnapshot } from '../types';
 import { Button, Card, Input, Select, ConfirmDialog, TextArea } from './ui';
 import { formatCurrency, formatDate, generateId, getMonthName } from '../utils';
 
@@ -90,12 +90,27 @@ export const InvestmentsView: React.FC<Props> = ({ data, onSave, onDelete }) => 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const existing = editingId ? data.find(i => i.id === editingId) : null;
+    const newValorActual = Number(formData.valorActual);
+
+    let historialValoraciones: ValuationSnapshot[] = existing?.historialValoraciones || [];
+
+    // Capture a dated snapshot whenever the user saves a value change
+    const valorChanged = !existing || existing.valorActual !== newValorActual;
+    if (valorChanged) {
+      historialValoraciones = [
+        ...historialValoraciones,
+        { id: generateId(), fecha: formData.fecha, valor: newValorActual },
+      ];
+    }
+
     const investment: Investment = {
       ...formData,
       id: editingId || generateId(),
       capitalInvertido: Number(formData.capitalInvertido),
-      valorActual: Number(formData.valorActual),
-      historialPagos: editingId ? (data.find(i => i.id === editingId)?.historialPagos || []) : []
+      valorActual: newValorActual,
+      historialPagos: existing?.historialPagos || [],
+      historialValoraciones,
     };
     onSave(investment);
     setIsFormOpen(false);

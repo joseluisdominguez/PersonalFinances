@@ -50,6 +50,12 @@ export interface InterestPayment {
   nota?: string;
 }
 
+export interface ValuationSnapshot {
+  id: string;
+  fecha: string;
+  valor: number;
+}
+
 export interface Investment {
   id: string;
   tipo: InvestmentType;
@@ -62,6 +68,7 @@ export interface Investment {
   detalles: any;
   estado?: 'activo' | 'completado' | 'vencido';
   historialPagos?: InterestPayment[];
+  historialValoraciones?: ValuationSnapshot[];
   notas?: string;
 }
 
