@@ -31,7 +31,7 @@ export const Button = ({
   disabled?: boolean;
   type?: 'button' | 'submit' | 'reset';
 }) => {
-  const base = "px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2";
+  const base = "px-4 py-2 rounded-lg font-medium transition-all duration-200 inline-flex items-center justify-center gap-2";
   const variants = {
     primary: "bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg disabled:opacity-50",
     danger: "bg-red-500 text-white hover:bg-red-600 shadow-md hover:shadow-lg disabled:opacity-50",
@@ -46,13 +46,25 @@ export const Button = ({
   );
 };
 
-export const Input = ({ label, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) => (
+export const Input = ({
+  label,
+  error,
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & {
+  label: string;
+  error?: string;
+}) => (
   <div className="flex flex-col gap-1 w-full">
     {label && <label className="text-sm font-medium text-gray-700">{label}</label>}
-    <input 
-      className="border-2 border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all bg-white text-gray-900 placeholder-gray-400"
+    <input
+      className={`border-2 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-all bg-white text-gray-900 placeholder-gray-400 ${
+        error
+          ? 'border-red-400 focus:border-red-500 focus:ring-red-100'
+          : 'border-gray-200 focus:border-blue-500 focus:ring-blue-100'
+      }`}
       {...props}
     />
+    {error && <p className="text-xs text-red-600 -mt-0.5">{error}</p>}
   </div>
 );
 

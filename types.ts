@@ -82,10 +82,117 @@ export interface AppConfig {
   banks: string[];
 }
 
+// === Módulo Autónomo ===
+
+export interface Owner {
+  id: string;
+  nombre: string;
+  nif: string;
+  direccion?: string;
+  iban?: string;
+  email?: string;
+  retencionPctDefault?: number;
+  serieFacturas?: string;
+}
+
+export interface Client {
+  id: string;
+  ownerId: string;
+  nombre: string;
+  nif: string;
+  direccion?: string;
+  email?: string;
+  retencionPct?: number;
+  notas?: string;
+}
+
+export type InvoiceStatus = 'borrador' | 'pendiente' | 'vencida' | 'pagada';
+
+export interface InvoiceLine {
+  id: string;
+  descripcion: string;
+  cantidad: number;
+  precioUnitario: number;
+  ivaPct: number;
+}
+
+export interface Attachment {
+  id: string;
+  nombre: string;
+  mime: string;
+  size: number;
+}
+
+export interface Invoice {
+  id: string;
+  ownerId: string;
+  clienteId: string;
+  serie: string;
+  numero: number;
+  referenciaCustom?: string;
+  fechaEmision: string;
+  fechaVencimiento?: string;
+  fechaCobro?: string;
+  estado: InvoiceStatus;
+  lineas: InvoiceLine[];
+  aplicaIrpf: boolean;
+  irpfPct: number;
+  notas?: string;
+  adjuntos?: Attachment[];
+  // Snapshot fiscal del cliente en el momento de emisión
+  clienteSnapshot?: {
+    nombre: string;
+    nif: string;
+    direccion?: string;
+  };
+}
+
+export interface Supplier {
+  id: string;
+  ownerId: string;
+  nombre: string;
+  nif: string;
+  direccion?: string;
+  email?: string;
+  notas?: string;
+}
+
+export type ReceivedInvoiceStatus = 'pendiente' | 'pagada';
+
+export interface ReceivedInvoiceLine {
+  id: string;
+  descripcion: string;
+  cantidad: number;
+  precioUnitario: number;
+  ivaPct: number;
+}
+
+export interface ReceivedInvoice {
+  id: string;
+  ownerId: string;
+  proveedorId: string;
+  numeroExterno: string;
+  fechaEmision: string;
+  fechaPago?: string;
+  estado: ReceivedInvoiceStatus;
+  lineas: ReceivedInvoiceLine[];
+  retencionIrpf?: number;
+  categoria?: string;
+  notas?: string;
+  adjuntos?: Attachment[];
+}
+
 export interface AppData {
   movimientos: Transaction[];
   recurrentes: RecurringTransaction[];
   balances: Balance[];
   inversiones: Investment[];
   config: AppConfig;
+  // Módulo autónomo
+  owners: Owner[];
+  clientes: Client[];
+  facturas: Invoice[];
+  proveedores: Supplier[];
+  facturasRecibidas: ReceivedInvoice[];
+  activeOwnerId?: string;
 }

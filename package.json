@@ -9,9 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.5.1",
+    "jszip": "^3.10.1",
+    "lucide-react": "0.475.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "lucide-react": "0.475.0",
     "recharts": "2.15.0"
   },
   "devDependencies": {
