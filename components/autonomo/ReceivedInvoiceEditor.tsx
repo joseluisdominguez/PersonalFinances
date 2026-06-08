@@ -15,6 +15,7 @@ interface Props {
   proveedores: Supplier[];
   activeOwner: Owner;
   editing?: ReceivedInvoice;
+  cloneFrom?: ReceivedInvoice;
   onSave: (r: ReceivedInvoice) => void;
   onClose: () => void;
 }
@@ -33,6 +34,7 @@ export const ReceivedInvoiceEditor: React.FC<Props> = ({
   proveedores,
   activeOwner,
   editing,
+  cloneFrom,
   onSave,
   onClose,
 }) => {
@@ -43,6 +45,7 @@ export const ReceivedInvoiceEditor: React.FC<Props> = ({
 
   const buildInitial = (): ReceivedInvoice => {
     if (editing) return editing;
+    if (cloneFrom) return cloneFrom;
     return {
       id: generateId(),
       ownerId: activeOwner.id,
@@ -62,7 +65,7 @@ export const ReceivedInvoiceEditor: React.FC<Props> = ({
   useEffect(() => {
     setForm(buildInitial());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing?.id]);
+  }, [editing?.id, cloneFrom?.id]);
 
   const totales = useMemo(
     () => calcReceivedInvoiceTotals(form.lineas, form.retencionIrpf || 0),

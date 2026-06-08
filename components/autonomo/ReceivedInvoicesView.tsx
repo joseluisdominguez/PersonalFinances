@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Plus, ShoppingBag, Edit2, Trash2, ArrowUp, ArrowDown, ArrowUpDown, Search } from 'lucide-react';
+import { Plus, ShoppingBag, Edit2, Trash2, Copy, ArrowUp, ArrowDown, ArrowUpDown, Search } from 'lucide-react';
 import { ReceivedInvoice, Supplier, Owner, ReceivedInvoiceStatus } from '../../types';
 import { Button, Card, ConfirmDialog } from '../ui';
-import { formatCurrency, formatDate } from '../../utils';
+import { formatCurrency, formatDate, generateId } from '../../utils';
 import { calcReceivedInvoiceTotals, filterByYearQuarter } from './utils';
 import { ReceivedInvoiceEditor } from './ReceivedInvoiceEditor';
 import { ReceivedInvoiceDetail } from './ReceivedInvoiceDetail';
@@ -40,6 +40,7 @@ export const ReceivedInvoicesView: React.FC<Props> = ({
   );
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editing, setEditing] = useState<ReceivedInvoice | undefined>(undefined);
+  const [cloning, setCloning] = useState<ReceivedInvoice | undefined>(undefined);
   const [viewing, setViewing] = useState<ReceivedInvoice | undefined>(undefined);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>('fecha');
@@ -149,11 +150,28 @@ export const ReceivedInvoicesView: React.FC<Props> = ({
 
   const openNew = () => {
     setEditing(undefined);
+    setCloning(undefined);
     setIsEditorOpen(true);
   };
 
   const openEdit = (f: ReceivedInvoice) => {
     setEditing(f);
+    setCloning(undefined);
+    setIsEditorOpen(true);
+  };
+
+  const openClone = (f: ReceivedInvoice) => {
+    const clon: ReceivedInvoice = {
+      ...f,
+      id: generateId(),
+      fechaEmision: new Date().toISOString().slice(0, 10),
+      fechaPago: undefined,
+      estado: 'pendiente',
+      adjuntos: [],
+      lineas: f.lineas.map((l) => ({ ...l, id: generateId() })),
+    };
+    setEditing(undefined);
+    setCloning(clon);
     setIsEditorOpen(true);
   };
 
@@ -387,6 +405,13 @@ export const ReceivedInvoicesView: React.FC<Props> = ({
                             <Edit2 size={16} />
                           </button>
                           <button
+                            onClick={() => openClone(f)}
+                            className="p-1.5 text-gray-400 hover:text-amber-600 rounded"
+                            title="Clonar (factura recurrente)"
+                          >
+                            <Copy size={16} />
+                          </button>
+                          <button
                             onClick={() => setDeleteId(f.id)}
                             className="p-1.5 text-gray-400 hover:text-red-600 rounded"
                             title="Eliminar"
@@ -409,6 +434,7 @@ export const ReceivedInvoicesView: React.FC<Props> = ({
           proveedores={proveedores}
           activeOwner={activeOwner}
           editing={editing}
+          cloneFrom={cloning}
           onSave={onSave}
           onClose={() => setIsEditorOpen(false)}
         />
@@ -422,6 +448,7 @@ export const ReceivedInvoicesView: React.FC<Props> = ({
           onClose={() => setViewing(undefined)}
           onEdit={() => {
             setEditing(viewing);
+            setCloning(undefined);
             setViewing(undefined);
             setIsEditorOpen(true);
           }}
