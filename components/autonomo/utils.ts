@@ -93,20 +93,6 @@ export const updateReferenciaNumber = (
   return `${prefix}${String(newNumber).padStart(digitsLen, '0')}`;
 };
 
-/**
- * Incrementa el último grupo de dígitos de un número externo, preservando
- * el padding y el texto que lo rodea. "FAC-2026-0012" -> "FAC-2026-0013".
- * Pensado para sugerir el siguiente número al clonar una factura recurrente.
- * Si no hay dígitos, devuelve el original sin cambios.
- */
-export const incrementNumeroExterno = (numeroExterno: string): string => {
-  const m = numeroExterno.match(/^(.*?)(\d+)(\D*)$/);
-  if (!m) return numeroExterno;
-  const [, prefix, digits, suffix] = m;
-  const next = String(Number(digits) + 1).padStart(digits.length, '0');
-  return `${prefix}${next}${suffix}`;
-};
-
 export const isInvoiceOverdue = (invoice: Invoice, today = new Date()): boolean => {
   if (invoice.estado !== 'pendiente') return false;
   if (!invoice.fechaVencimiento) return false;

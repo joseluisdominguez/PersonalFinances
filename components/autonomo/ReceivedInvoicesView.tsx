@@ -3,11 +3,7 @@ import { Plus, ShoppingBag, Edit2, Trash2, Copy, ArrowUp, ArrowDown, ArrowUpDown
 import { ReceivedInvoice, Supplier, Owner, ReceivedInvoiceStatus } from '../../types';
 import { Button, Card, ConfirmDialog } from '../ui';
 import { formatCurrency, formatDate, generateId } from '../../utils';
-import {
-  calcReceivedInvoiceTotals,
-  filterByYearQuarter,
-  incrementNumeroExterno,
-} from './utils';
+import { calcReceivedInvoiceTotals, filterByYearQuarter } from './utils';
 import { ReceivedInvoiceEditor } from './ReceivedInvoiceEditor';
 import { ReceivedInvoiceDetail } from './ReceivedInvoiceDetail';
 
@@ -168,7 +164,6 @@ export const ReceivedInvoicesView: React.FC<Props> = ({
     const clon: ReceivedInvoice = {
       ...f,
       id: generateId(),
-      numeroExterno: incrementNumeroExterno(f.numeroExterno),
       fechaEmision: new Date().toISOString().slice(0, 10),
       fechaPago: undefined,
       estado: 'pendiente',
