@@ -49,6 +49,7 @@ export const InvoicesView: React.FC<Props> = ({
   const [filterStatus, setFilterStatus] = useState<InvoiceStatus | 'todas'>('todas');
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | undefined>(undefined);
+  const [cloning, setCloning] = useState<Invoice | undefined>(undefined);
   const [viewing, setViewing] = useState<Invoice | undefined>(undefined);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>('numero');
@@ -165,11 +166,13 @@ export const InvoicesView: React.FC<Props> = ({
 
   const openNew = () => {
     setEditing(undefined);
+    setCloning(undefined);
     setIsEditorOpen(true);
   };
 
   const openEdit = (i: Invoice) => {
     setEditing(i);
+    setCloning(undefined);
     setIsEditorOpen(true);
   };
 
@@ -177,7 +180,7 @@ export const InvoicesView: React.FC<Props> = ({
     onSave({ ...f, estado, fechaCobro: estado === 'pagada' ? new Date().toISOString().slice(0, 10) : f.fechaCobro });
   };
 
-  const handleClone = (f: Invoice) => {
+  const openClone = (f: Invoice) => {
     const todayIso = new Date().toISOString().slice(0, 10);
     const year = new Date(todayIso).getFullYear();
     const numero = getNextInvoiceNumber(facturas, activeOwner.id, f.serie, year);
@@ -205,7 +208,9 @@ export const InvoicesView: React.FC<Props> = ({
       lineas: f.lineas.map((l) => ({ ...l, id: generateId() })),
       clienteSnapshot: undefined,
     };
-    onSave(clon);
+    setEditing(undefined);
+    setCloning(clon);
+    setIsEditorOpen(true);
   };
 
   const downloadPdf = async (f: Invoice) => {
@@ -435,7 +440,7 @@ export const InvoicesView: React.FC<Props> = ({
                             <Download size={16} />
                           </button>
                           <button
-                            onClick={() => handleClone(f)}
+                            onClick={() => openClone(f)}
                             className="p-1.5 text-gray-400 hover:text-indigo-600 rounded"
                             title="Clonar como borrador"
                           >
@@ -472,8 +477,12 @@ export const InvoicesView: React.FC<Props> = ({
           clientes={clientes}
           activeOwner={activeOwner}
           editing={editing}
+          cloneFrom={cloning}
           onSave={onSave}
-          onClose={() => setIsEditorOpen(false)}
+          onClose={() => {
+            setIsEditorOpen(false);
+            setCloning(undefined);
+          }}
         />
       )}
 
@@ -485,6 +494,7 @@ export const InvoicesView: React.FC<Props> = ({
           onClose={() => setViewing(undefined)}
           onEdit={() => {
             setEditing(viewing);
+            setCloning(undefined);
             setViewing(undefined);
             setIsEditorOpen(true);
           }}

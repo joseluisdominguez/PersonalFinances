@@ -18,6 +18,7 @@ interface Props {
   clientes: Client[];
   activeOwner: Owner;
   editing?: Invoice;
+  cloneFrom?: Invoice;
   onSave: (i: Invoice) => void;
   onClose: () => void;
 }
@@ -43,6 +44,7 @@ export const InvoiceEditor: React.FC<Props> = ({
   clientes,
   activeOwner,
   editing,
+  cloneFrom,
   onSave,
   onClose,
 }) => {
@@ -53,6 +55,7 @@ export const InvoiceEditor: React.FC<Props> = ({
 
   const buildInitial = (): Invoice => {
     if (editing) return editing;
+    if (cloneFrom) return cloneFrom;
     const fechaEmision = today();
     const year = new Date(fechaEmision).getFullYear();
     const serie = activeOwner.serieFacturas || 'A';
@@ -80,7 +83,7 @@ export const InvoiceEditor: React.FC<Props> = ({
   useEffect(() => {
     setForm(buildInitial());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing?.id]);
+  }, [editing?.id, cloneFrom?.id]);
 
   const cliente = clientesDelOwner.find((c) => c.id === form.clienteId);
 
