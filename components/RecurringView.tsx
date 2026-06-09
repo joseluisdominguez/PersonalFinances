@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Trash2, Edit2, Repeat, Calendar, DollarSign, X, Save, ShieldCheck, CreditCard, Clock, ChevronRight } from 'lucide-react';
 import { RecurringTransaction, CategoryItem, FrequencyType } from '../types';
-import { Button, Card, Input, Select, ConfirmDialog } from './ui';
+import { Button, Card, Input, Select, ConfirmDialog, Modal } from './ui';
 import { formatCurrency, generateId, getMonthName } from '../utils';
 
 interface Props {
@@ -147,7 +147,7 @@ export const RecurringView: React.FC<Props> = ({ data, categories, onSave, onDel
       )}
 
       {isFormOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+        <Modal>
           <Card className="max-w-lg w-full shadow-2xl border-none p-0 overflow-hidden bg-white">
              <div className="bg-gray-800 p-6 text-white flex justify-between items-center">
                 <h3 className="text-xl font-bold">{editingId ? 'Editar Plantilla' : 'Nueva Plantilla'}</h3>
@@ -192,7 +192,7 @@ export const RecurringView: React.FC<Props> = ({ data, categories, onSave, onDel
                 </div>
              </form>
           </Card>
-        </div>
+        </Modal>
       )}
 
       <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={() => deleteId && onDelete(deleteId)} title="Eliminar Plantilla" message="¿Estás seguro de borrar esta regla?" />

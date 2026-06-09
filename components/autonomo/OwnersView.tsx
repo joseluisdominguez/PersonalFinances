@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Edit2, User, X, Briefcase, Eraser, AlertTriangle } from 'lucide-react';
 import { Owner, Client, Supplier, Invoice, ReceivedInvoice } from '../../types';
-import { Button, Card, Input, ConfirmDialog } from '../ui';
+import { Button, Card, Input, ConfirmDialog, Modal } from '../ui';
 import { generateId } from '../../utils';
 import { formatIban, isValidIban } from './utils';
 
@@ -161,7 +161,7 @@ export const OwnersView: React.FC<Props> = ({
       )}
 
       {isFormOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+        <Modal>
           <Card className="max-w-lg w-full shadow-2xl border-none p-0 overflow-hidden bg-white">
             <div className="bg-gray-800 p-6 text-white flex justify-between items-center">
               <h3 className="text-xl font-bold">
@@ -255,7 +255,7 @@ export const OwnersView: React.FC<Props> = ({
               </div>
             </form>
           </Card>
-        </div>
+        </Modal>
       )}
 
       <ConfirmDialog
@@ -293,7 +293,7 @@ export const OwnersView: React.FC<Props> = ({
         };
 
         return (
-          <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+          <Modal>
             <Card className="max-w-md w-full shadow-2xl border-none p-0 overflow-hidden bg-white">
               <div className="bg-amber-600 p-5 text-white flex items-center gap-3">
                 <AlertTriangle size={22} />
@@ -364,7 +364,7 @@ export const OwnersView: React.FC<Props> = ({
                 </div>
               </div>
             </Card>
-          </div>
+          </Modal>
         );
       })()}
     </div>

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Trash2, Edit2, Truck, X, Search } from 'lucide-react';
 import { Supplier, Owner } from '../../types';
-import { Button, Card, Input, ConfirmDialog } from '../ui';
+import { Button, Card, Input, ConfirmDialog, Modal } from '../ui';
 import { generateId } from '../../utils';
 
 interface Props {
@@ -162,7 +162,7 @@ export const SuppliersView: React.FC<Props> = ({
       )}
 
       {isFormOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+        <Modal>
           <Card className="max-w-lg w-full shadow-2xl border-none p-0 overflow-hidden bg-white">
             <div className="bg-gray-800 p-6 text-white flex justify-between items-center">
               <h3 className="text-xl font-bold">
@@ -222,7 +222,7 @@ export const SuppliersView: React.FC<Props> = ({
               </div>
             </form>
           </Card>
-        </div>
+        </Modal>
       )}
 
       <ConfirmDialog

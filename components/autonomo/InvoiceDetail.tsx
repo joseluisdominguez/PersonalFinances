@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, Download, Edit2, FileText, Paperclip, Mail, MapPin, Banknote } from 'lucide-react';
 import { Invoice, Owner, Client, InvoiceStatus } from '../../types';
-import { Button, Card } from '../ui';
+import { Button, Card, Modal } from '../ui';
 import { formatCurrency, formatDate } from '../../utils';
 import {
   calcInvoiceTotals,
@@ -60,8 +60,8 @@ export const InvoiceDetail: React.FC<Props> = ({
   const clienteEmail = cliente?.email;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn overflow-y-auto">
-      <Card className="max-w-4xl w-full shadow-2xl border-none p-0 overflow-hidden bg-white my-8">
+    <Modal>
+      <Card className="max-w-4xl w-full shadow-2xl border-none p-0 overflow-hidden bg-white">
         <div className="bg-gray-800 p-6 text-white flex justify-between items-center">
           <div className="flex items-center gap-4">
             <div className="p-2 bg-white/10 rounded-lg">
@@ -296,6 +296,6 @@ export const InvoiceDetail: React.FC<Props> = ({
           </div>
         </div>
       </Card>
-    </div>
+    </Modal>
   );
 };

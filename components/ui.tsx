@@ -1,5 +1,31 @@
 
 import React from 'react';
+import { createPortal } from 'react-dom';
+
+interface ModalProps {
+  children?: React.ReactNode;
+  /** Clases extra para el contenedor de centrado (p. ej. "items-start"). */
+  className?: string;
+}
+
+/**
+ * Overlay de modal renderizado en un portal a document.body. Al vivir fuera del
+ * árbol de la vista, su `position: fixed` se ancla siempre al viewport y no a un
+ * ancestro con `transform` (la clase animate-fadeIn lo crea), evitando que el
+ * overlay quede del tamaño del contenido de fondo. El layout interno
+ * (min-h-full + items-center + overflow-y-auto) centra los modales cortos y
+ * permite hacer scroll en los altos sin recortar la parte superior.
+ */
+export const Modal: React.FC<ModalProps> = ({ children, className = '' }) => {
+  return createPortal(
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-black/60 backdrop-blur-sm animate-fadeIn">
+      <div className={`flex min-h-full items-center justify-center p-4 ${className}`}>
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 export const Card: React.FC<{ children?: React.ReactNode; className?: string }> = ({ children, className = '' }) => {
   // Solo aplicamos bg-white si no se proporciona otra clase de fondo
@@ -105,8 +131,8 @@ export const ConfirmDialog = ({
 }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 animate-fadeIn">
+    <Modal>
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
         <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
         <p className="text-gray-600 mb-6">{message}</p>
         <div className="flex justify-end gap-3">
@@ -114,6 +140,6 @@ export const ConfirmDialog = ({
           <Button variant="danger" onClick={() => { onConfirm(); onClose(); }}>Eliminar</Button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

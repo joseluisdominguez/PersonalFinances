@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { Invoice, InvoiceLine, Client, Owner } from '../../types';
-import { Button, Card, Input, Select } from '../ui';
+import { Button, Card, Input, Select, Modal } from '../ui';
 import { formatCurrency, generateId } from '../../utils';
 import {
   calcInvoiceTotals,
@@ -142,8 +142,8 @@ export const InvoiceEditor: React.FC<Props> = ({
   const noClients = clientesDelOwner.length === 0;
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn overflow-y-auto">
-      <Card className="max-w-4xl w-full shadow-2xl border-none p-0 overflow-hidden bg-white my-8">
+    <Modal>
+      <Card className="max-w-4xl w-full shadow-2xl border-none p-0 overflow-hidden bg-white">
         <div className="bg-gray-800 p-6 text-white flex justify-between items-center">
           <div>
             <h3 className="text-xl font-bold">
@@ -419,6 +419,6 @@ export const InvoiceEditor: React.FC<Props> = ({
           </form>
         )}
       </Card>
-    </div>
+    </Modal>
   );
 };
