@@ -8,7 +8,12 @@ import {
 } from '../../types';
 import { Button, Card, Input, Select, Modal } from '../ui';
 import { formatCurrency, generateId } from '../../utils';
-import { calcReceivedInvoiceTotals, IVA_RATES } from './utils';
+import {
+  calcReceivedInvoiceTotals,
+  getImputacionPct,
+  DEFAULT_IMPUTACION_PCT,
+  IVA_RATES,
+} from './utils';
 import { AttachmentsField } from './AttachmentsField';
 
 interface Props {
@@ -55,6 +60,7 @@ export const ReceivedInvoiceEditor: React.FC<Props> = ({
       estado: 'pendiente',
       lineas: [emptyLine()],
       retencionIrpf: 0,
+      imputacionPct: DEFAULT_IMPUTACION_PCT,
       categoria: '',
       notas: '',
     };
@@ -91,6 +97,7 @@ export const ReceivedInvoiceEditor: React.FC<Props> = ({
     onSave({
       ...form,
       retencionIrpf: Number(form.retencionIrpf) || 0,
+      imputacionPct: getImputacionPct(form),
       lineas: form.lineas.map((l) => ({
         ...l,
         cantidad: Number(l.cantidad),
@@ -277,6 +284,29 @@ export const ReceivedInvoiceEditor: React.FC<Props> = ({
                     setForm({ ...form, retencionIrpf: Number(e.target.value) })
                   }
                 />
+                <div>
+                  <Input
+                    label="% Imputación"
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={form.imputacionPct ?? DEFAULT_IMPUTACION_PCT}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        imputacionPct:
+                          e.target.value === ''
+                            ? undefined
+                            : Math.round(Number(e.target.value)),
+                      })
+                    }
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Porcentaje que computa en la analítica fiscal (afectación a la
+                    actividad). Por defecto 100%.
+                  </p>
+                </div>
                 <Input
                   label="Notas"
                   value={form.notas || ''}

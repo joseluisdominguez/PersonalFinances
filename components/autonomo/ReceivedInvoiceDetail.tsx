@@ -8,7 +8,11 @@ import {
 } from '../../types';
 import { Button, Card, Modal } from '../ui';
 import { formatCurrency, formatDate } from '../../utils';
-import { calcReceivedInvoiceTotals, calcReceivedLineBase } from './utils';
+import {
+  calcReceivedInvoiceTotals,
+  calcReceivedLineBase,
+  getImputacionPct,
+} from './utils';
 import { downloadAttachment } from './idb';
 
 interface Props {
@@ -46,6 +50,8 @@ export const ReceivedInvoiceDetail: React.FC<Props> = ({
     invoice.lineas,
     invoice.retencionIrpf || 0
   );
+  const imputacionPct = getImputacionPct(invoice);
+  const factor = imputacionPct / 100;
 
   return (
     <Modal>
@@ -252,6 +258,22 @@ export const ReceivedInvoiceDetail: React.FC<Props> = ({
                     {formatCurrency(totales.total)}
                   </span>
                 </div>
+                <div className="flex justify-between text-xs pt-2 border-t mt-2">
+                  <span className="text-gray-500">Imputación a la actividad</span>
+                  <span className="font-medium text-gray-700">{imputacionPct}%</span>
+                </div>
+                {imputacionPct < 100 && (
+                  <div className="text-xs text-gray-500 space-y-1">
+                    <div className="flex justify-between">
+                      <span>Base deducible</span>
+                      <span>{formatCurrency(totales.baseImponible * factor)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>IVA soportado deducible</span>
+                      <span>{formatCurrency(totales.totalIva * factor)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </Card>
           </div>

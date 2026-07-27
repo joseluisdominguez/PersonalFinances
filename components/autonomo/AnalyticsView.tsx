@@ -13,7 +13,10 @@ import {
   calcInvoiceTotals,
   calcReceivedInvoiceTotals,
   filterByYearQuarter,
+  getImputacionPct,
 } from './utils';
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 interface Props {
   facturas: Invoice[];
@@ -89,14 +92,20 @@ export const AnalyticsView: React.FC<Props> = ({
     let irpfSoportado = 0;
     const ivaPorTipo: Record<number, { base: number; cuota: number }> = {};
     compras.forEach((c) => {
+      // El % de imputación pondera cuánto de la factura computa fiscalmente
+      // (afectación parcial a la actividad). Ausente = 100%.
+      const factor = getImputacionPct(c) / 100;
       const t = calcReceivedInvoiceTotals(c.lineas, c.retencionIrpf || 0);
-      base += t.baseImponible;
-      ivaSoportado += t.totalIva;
-      irpfSoportado += t.totalIrpf;
+      base += round2(t.baseImponible * factor);
+      ivaSoportado += round2(t.totalIva * factor);
+      irpfSoportado += round2(t.totalIrpf * factor);
       Object.entries(t.ivaDesglose).forEach(([pct, { base: b, cuota }]) => {
         const key = Number(pct);
         const acc = ivaPorTipo[key] || { base: 0, cuota: 0 };
-        ivaPorTipo[key] = { base: acc.base + b, cuota: acc.cuota + cuota };
+        ivaPorTipo[key] = {
+          base: round2(acc.base + b * factor),
+          cuota: round2(acc.cuota + cuota * factor),
+        };
       });
     });
     return { base, ivaSoportado, irpfSoportado, ivaPorTipo };
@@ -105,10 +114,11 @@ export const AnalyticsView: React.FC<Props> = ({
   // Modelo 303
   const ivaAIngresar = ventasAgg.ivaRepercutido - comprasAgg.ivaSoportado;
 
-  // Modelo 130
-  const rendimientoNeto = ventasAgg.base - comprasAgg.base;
-  const pagoFraccionado20 = rendimientoNeto > 0 ? rendimientoNeto * 0.2 : 0;
-  const resultado130 = pagoFraccionado20 - ventasAgg.irpfRetenido;
+  // ¿Alguna compra computa parcialmente (imputación < 100%)?
+  const hayImputacionParcial = useMemo(
+    () => compras.some((c) => getImputacionPct(c) < 100),
+    [compras]
+  );
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -202,23 +212,23 @@ export const AnalyticsView: React.FC<Props> = ({
           <p className="text-2xl font-bold text-amber-900">
             {formatCurrency(ventasAgg.irpfRetenido)}
           </p>
-          <p className="text-xs text-amber-700 mt-1">A descontar del 130</p>
+          <p className="text-xs text-amber-700 mt-1">Retenido por tus clientes</p>
         </Card>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Calculator size={20} className="text-blue-600" />
-            <h4 className="font-bold text-gray-900">
-              Modelo 303 · IVA{' '}
-              <span className="text-gray-500 text-sm font-normal">
-                ({QUARTER_LABEL[String(quarter)]})
-              </span>
-            </h4>
-          </div>
-          <div className="space-y-2 text-sm">
-            <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mt-2">
+      <Card>
+        <div className="flex items-center gap-2 mb-4">
+          <Calculator size={20} className="text-blue-600" />
+          <h4 className="font-bold text-gray-900">
+            Modelo 303 · IVA{' '}
+            <span className="text-gray-500 text-sm font-normal">
+              ({QUARTER_LABEL[String(quarter)]})
+            </span>
+          </h4>
+        </div>
+        <div className="grid md:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">
               IVA repercutido (ventas)
             </p>
             {Object.keys(ventasAgg.ivaPorTipo).length === 0 ? (
@@ -236,13 +246,21 @@ export const AnalyticsView: React.FC<Props> = ({
                 ))
             )}
             <div className="flex justify-between border-t pt-2 mt-2">
+              <span className="text-gray-600">Base imponible (ventas)</span>
+              <span className="font-medium">
+                {formatCurrency(ventasAgg.base)}
+              </span>
+            </div>
+            <div className="flex justify-between">
               <span className="font-medium">Total IVA repercutido</span>
               <span className="font-bold">
                 {formatCurrency(ventasAgg.ivaRepercutido)}
               </span>
             </div>
+          </div>
 
-            <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold mt-4">
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase tracking-widest text-gray-400 font-bold">
               IVA soportado (compras)
             </p>
             {Object.keys(comprasAgg.ivaPorTipo).length === 0 ? (
@@ -260,94 +278,43 @@ export const AnalyticsView: React.FC<Props> = ({
                 ))
             )}
             <div className="flex justify-between border-t pt-2 mt-2">
+              <span className="text-gray-600">Base imponible (compras)</span>
+              <span className="font-medium">
+                {formatCurrency(comprasAgg.base)}
+              </span>
+            </div>
+            <div className="flex justify-between">
               <span className="font-medium">Total IVA soportado</span>
               <span className="font-bold">
                 {formatCurrency(comprasAgg.ivaSoportado)}
               </span>
             </div>
+          </div>
+        </div>
 
-            <div
-              className={`flex justify-between border-t-2 pt-3 mt-3 text-base ${
-                ivaAIngresar >= 0 ? 'border-blue-200' : 'border-emerald-200'
-              }`}
-            >
-              <span className="font-bold">
-                {ivaAIngresar >= 0 ? 'A ingresar (casilla 71)' : 'A devolver'}
-              </span>
-              <span
-                className={`font-bold ${
-                  ivaAIngresar >= 0 ? 'text-blue-600' : 'text-emerald-600'
-                }`}
-              >
-                {formatCurrency(Math.abs(ivaAIngresar))}
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Calculator size={20} className="text-amber-600" />
-            <h4 className="font-bold text-gray-900">
-              Modelo 130 · IRPF{' '}
-              <span className="text-gray-500 text-sm font-normal">
-                ({QUARTER_LABEL[String(quarter)]})
-              </span>
-            </h4>
-          </div>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-600">
-                01 · Ingresos computables
-              </span>
-              <span className="font-medium">{formatCurrency(ventasAgg.base)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">02 · Gastos deducibles</span>
-              <span className="font-medium">{formatCurrency(comprasAgg.base)}</span>
-            </div>
-            <div className="flex justify-between border-t pt-2">
-              <span className="text-gray-600 font-medium">
-                03 · Rendimiento neto
-              </span>
-              <span className="font-bold">
-                {formatCurrency(rendimientoNeto)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">04 · 20% del rendimiento</span>
-              <span className="font-medium">
-                {formatCurrency(pagoFraccionado20)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">
-                06 · Retenciones soportadas
-              </span>
-              <span className="font-medium">
-                -{formatCurrency(ventasAgg.irpfRetenido)}
-              </span>
-            </div>
-            <div className="flex justify-between border-t-2 pt-3 mt-3 text-base border-amber-200">
-              <span className="font-bold">
-                {resultado130 >= 0 ? 'Resultado a ingresar' : 'A compensar'}
-              </span>
-              <span
-                className={`font-bold ${
-                  resultado130 >= 0 ? 'text-amber-600' : 'text-emerald-600'
-                }`}
-              >
-                {formatCurrency(Math.abs(resultado130))}
-              </span>
-            </div>
-            <p className="text-[10px] text-gray-400 mt-3 leading-relaxed">
-              * Cálculo simplificado para estimación. No incluye pagos
-              fraccionados de trimestres anteriores ni deducciones específicas.
-              Consulta con tu gestor antes de presentar.
-            </p>
-          </div>
-        </Card>
-      </div>
+        <div
+          className={`flex justify-between border-t-2 pt-3 mt-3 text-base ${
+            ivaAIngresar >= 0 ? 'border-blue-200' : 'border-emerald-200'
+          }`}
+        >
+          <span className="font-bold">
+            {ivaAIngresar >= 0 ? 'A ingresar (casilla 71)' : 'A devolver'}
+          </span>
+          <span
+            className={`font-bold ${
+              ivaAIngresar >= 0 ? 'text-blue-600' : 'text-emerald-600'
+            }`}
+          >
+            {formatCurrency(Math.abs(ivaAIngresar))}
+          </span>
+        </div>
+        {hayImputacionParcial && (
+          <p className="text-[10px] text-gray-400 mt-3 leading-relaxed">
+            * Las compras se computan ponderadas por su % de imputación
+            (afectación a la actividad).
+          </p>
+        )}
+      </Card>
     </div>
   );
 };

@@ -177,6 +177,9 @@ export interface ReceivedInvoice {
   estado: ReceivedInvoiceStatus;
   lineas: ReceivedInvoiceLine[];
   retencionIrpf?: number;
+  // Porcentaje de imputación (afectación) a la actividad: 0-100, entero.
+  // Pondera cuánto de la factura computa en la analítica fiscal. Ausente = 100%.
+  imputacionPct?: number;
   categoria?: string;
   notas?: string;
   adjuntos?: Attachment[];

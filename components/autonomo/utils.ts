@@ -2,6 +2,17 @@ import { Invoice, InvoiceLine, ReceivedInvoice, ReceivedInvoiceLine } from '../.
 
 export const IVA_RATES = [0, 4, 10, 21];
 export const DEFAULT_IRPF_PCT = 15;
+export const DEFAULT_IMPUTACION_PCT = 100;
+
+/**
+ * Devuelve el % de imputación de una factura recibida, normalizado a entero 0-100.
+ * Ausente o inválido → 100% (comportamiento por defecto para movimientos actuales).
+ */
+export const getImputacionPct = (invoice: Pick<ReceivedInvoice, 'imputacionPct'>): number => {
+  const raw = invoice.imputacionPct;
+  if (raw === undefined || raw === null || Number.isNaN(raw)) return DEFAULT_IMPUTACION_PCT;
+  return Math.min(100, Math.max(0, Math.round(raw)));
+};
 
 export interface InvoiceTotals {
   baseImponible: number;
